@@ -21,6 +21,15 @@ The `rustmt5` binary will be available in your `$PATH`.
 
 ## Usage
 
+### Help and version
+
+```bash
+rustmt5 --help              # list subcommands and global options
+rustmt5 --version           # print package version (from Cargo.toml)
+rustmt5 compile --help      # compile subcommand options
+rustmt5 test --help         # test subcommand options
+```
+
 ### Compile an MQL5 file
 
 ```bash
