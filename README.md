@@ -38,6 +38,15 @@ rustmt5 compile MyEA.mq5
 
 The compiler will produce a `MyEA.ex5` file alongside the source. Errors and warnings from MetaEditor are printed to the terminal.
 
+#### Compile artifacts: `.ex5` and `.log`
+
+When compiling `MyEA.mq5`, MetaEditor produces two useful files next to the source:
+
+- **`MyEA.ex5`**: the compiled binary used by MT5 (this is what you run in the terminal / tester).
+- **`MyEA.log`**: the compiler log. `rustmt5` prints this log to the terminal, and uses it as the source of truth for whether compilation succeeded (e.g. `Result: 0 errors, 0 warnings`).
+
+**Encoding note:** MetaEditor commonly writes `.log` files as **UTF‑16LE with a BOM**. `rustmt5` detects and decodes this automatically.
+
 #### Copy output to a specific directory
 
 Use `--output` (or `-o`) to copy the compiled `.ex5` to a directory of your choice:
