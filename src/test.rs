@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
 use crate::wine;
+use crate::wine_output::filter_wine_noise;
 
 pub fn run(file: &Path) -> Result<()> {
     validate_ini_file(file)?;
@@ -22,8 +23,8 @@ pub fn run(file: &Path) -> Result<()> {
             detail: format!("failed to launch Wine: {e}"),
         })?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = filter_wine_noise(&String::from_utf8_lossy(&output.stdout));
+    let stderr = filter_wine_noise(&String::from_utf8_lossy(&output.stderr));
 
     if !stdout.is_empty() {
         println!("{stdout}");
@@ -34,7 +35,10 @@ pub fn run(file: &Path) -> Result<()> {
 
     if !output.status.success() {
         return Err(Error::TestFailed {
-            detail: format!("terminal64 exited with {}", output.status),
+            detail: format!(
+                "terminal64 exited with {}. Common causes: MT5 already running, Expert not found in MQL5/Experts/, or missing historical data for the symbol/timeframe.",
+                output.status
+            ),
         });
     }
 

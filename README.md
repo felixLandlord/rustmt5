@@ -65,7 +65,15 @@ rustmt5 test backtest.ini
 
 This launches MT5's strategy tester headlessly using the provided configuration. Results are written to MT5's reports directory.
 
+Wine debug noise (toolbar/HID/MoltenVK messages) is suppressed automatically via `WINEDEBUG=-all` and output filtering, so the terminal stays readable.
+
 > **Note:** There is no `--output` flag for `test` because the `.ini` file's `Report` field already controls where MT5 writes its report. Set `Report=my_report` in your `.ini` to control the output filename.
+
+Before running a test, ensure:
+
+- MT5 is **not already open** (only one terminal instance at a time)
+- The compiled EA exists as `MQL5/Experts/<Expert>.ex5` (e.g. copy `strategy.ex5` from your project)
+- Historical data exists for the `Symbol` and `Period` in your `.ini`
 
 ### Example `.ini` config
 
@@ -136,9 +144,10 @@ src/
 ├── cli.rs        # CLI argument parsing (clap)
 ├── error.rs      # Error types
 ├── mt5.rs        # MT5 binary discovery
-├── wine.rs       # Mac-to-Wine path translation
-├── compile.rs    # Compile subcommand
-└── test.rs       # Test subcommand
+├── wine.rs         # Mac-to-Wine path translation
+├── wine_output.rs  # Wine stderr noise filtering
+├── compile.rs      # Compile subcommand
+└── test.rs         # Test subcommand
 ```
 
 ## Distribution
@@ -214,6 +223,9 @@ export WINEPREFIX="$HOME/Library/Application Support/net.metaquotes.wine.metatra
 
 **"MT5 must not already be running"**
 Only one instance of MT5 can run at a time. Quit any running MT5 instance before using `rustmt5 test`.
+
+**`rustmt5 test` fails with a non-zero exit code (e.g. 189)**
+The strategy tester did not complete successfully. Check that the EA is installed under `MQL5/Experts/`, the `.ini` `[Tester]` settings are valid, and you have history for the symbol/timeframe. Wine GUI spam in the terminal is harmless and is filtered by `rustmt5`.
 
 ## References
 

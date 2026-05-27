@@ -4,6 +4,7 @@ mod error;
 mod mt5;
 mod test;
 mod wine;
+mod wine_output;
 
 use std::process;
 

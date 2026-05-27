@@ -40,10 +40,12 @@ impl Mt5Paths {
         })
     }
 
-    /// Start a Wine process with `WINEPREFIX` set.
+    /// Start a Wine process with `WINEPREFIX` set and Wine debug output suppressed.
     pub fn wine_command(&self) -> Command {
         let mut cmd = Command::new(&self.wine);
         cmd.env("WINEPREFIX", &self.wine_prefix);
+        // Silence Wine fixme/err/warn spam on stderr (toolbar, HID, MoltenVK, etc.)
+        cmd.env("WINEDEBUG", "-all");
         cmd
     }
 }

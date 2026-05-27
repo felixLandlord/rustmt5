@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
 use crate::wine;
+use crate::wine_output::filter_wine_noise;
 
 pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     validate_mq5_file(file)?;
@@ -108,35 +109,6 @@ fn wait_and_read_log(mq5: &Path, canonical_log_path: &Path) -> Option<String> {
     }
 
     read_log(canonical_log_path).or_else(|| read_log(&relative_log_path))
-}
-
-/// Filter out Wine diagnostic noise that is irrelevant to MQL5 compilation.
-fn filter_wine_noise(text: &str) -> String {
-    text.lines()
-        .filter(|line| !is_wine_noise(line))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn is_wine_noise(line: &str) -> bool {
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-    // Wine debug prefixes: "XXXX:fixme:", "XXXX:err:", "XXXX:warn:"
-    if let Some(rest) = trimmed.get(5..) {
-        if rest.starts_with("fixme:")
-            || rest.starts_with("err:")
-            || rest.starts_with("warn:")
-        {
-            return true;
-        }
-    }
-    // MoltenVK info
-    if trimmed.starts_with("[mvk-") {
-        return true;
-    }
-    false
 }
 
 fn evaluate_compile_outcome(
@@ -330,46 +302,6 @@ Result: 2 errors, 0 warnings\n";
     #[test]
     fn parse_compile_log_returns_none_for_no_summary() {
         assert_eq!(parse_compile_log("just some text\n"), None);
-    }
-
-    #[test]
-    fn filter_wine_noise_removes_fixme() {
-        let input = "01d4:fixme:thread:get_thread_times not implemented\nReal output\n";
-        assert_eq!(filter_wine_noise(input), "Real output");
-    }
-
-    #[test]
-    fn filter_wine_noise_removes_err() {
-        let input = "00bc:err:hid:handle_DeviceMatchingCallback Ignoring HID\n";
-        assert_eq!(filter_wine_noise(input), "");
-    }
-
-    #[test]
-    fn filter_wine_noise_removes_moltenvk() {
-        let input = "[mvk-info] MoltenVK version 1.2.7\nActual line\n";
-        assert_eq!(filter_wine_noise(input), "Actual line");
-    }
-
-    #[test]
-    fn filter_wine_noise_keeps_real_output() {
-        let input = "strategy.mq5 : 0 error(s), 0 warning(s)\n";
-        assert_eq!(filter_wine_noise(input), "strategy.mq5 : 0 error(s), 0 warning(s)");
-    }
-
-    #[test]
-    fn filter_wine_noise_preserves_empty_lines() {
-        let input = "line1\n\nline2\n";
-        assert_eq!(filter_wine_noise(input), "line1\n\nline2");
-    }
-
-    #[test]
-    fn is_wine_noise_detects_all_patterns() {
-        assert!(is_wine_noise("01d4:fixme:thread:something"));
-        assert!(is_wine_noise("00bc:err:hid:something"));
-        assert!(is_wine_noise("003c:warn:something:else"));
-        assert!(is_wine_noise("[mvk-info] stuff"));
-        assert!(!is_wine_noise("Result: 0 errors, 0 warnings"));
-        assert!(!is_wine_noise(""));
     }
 
     #[test]
