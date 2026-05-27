@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
@@ -14,7 +13,8 @@ pub fn run(file: &Path) -> Result<()> {
 
     eprintln!("Launching strategy tester with {}...", file.display());
 
-    let output = Command::new(&paths.wine)
+    let output = paths
+        .wine_command()
         .arg(&paths.terminal)
         .arg(format!("/config:{wine_path}"))
         .output()

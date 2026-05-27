@@ -79,21 +79,36 @@ void OnStart()
 
 ## How it works
 
-1. **Path discovery** — `rustmt5` searches `/Applications/MetaTrader 5.app` and `~/Applications/MetaTrader 5.app` for `wine64`, `metaeditor64.exe`, and `terminal64.exe`.
+1. **Path discovery** — `rustmt5` locates Wine inside `MetaTrader 5.app` (`Contents/SharedSupport/wine/bin/wine64`) and MT5 binaries in the Wine prefix at `~/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/`.
 2. **Path translation** — macOS paths are converted to Wine's `Z:\` drive format (e.g. `/Users/you/ea.mq5` becomes `Z:\Users\you\ea.mq5`).
-3. **Execution** — the appropriate binary is invoked through Wine with the translated path.
+3. **Execution** — Wine runs with `WINEPREFIX` set to the MetaQuotes prefix, then invokes MetaEditor or the terminal with the translated path.
 
 ## Environment variables
 
-Override auto-discovery by setting any of these:
+Auto-discovery works on a standard Mac MT5 install. Override any path if yours differs (CrossOver, multiple terminals, etc.):
 
 | Variable | Description |
 |---|---|
+| `RUSTMT5_WINEPREFIX` | Wine prefix directory (`net.metaquotes.wine.metatrader5`) |
 | `RUSTMT5_WINE` | Path to the `wine64` binary |
-| `RUSTMT5_EDITOR` | Path to `metaeditor64.exe` |
+| `RUSTMT5_EDITOR` | Path to `MetaEditor64.exe` |
 | `RUSTMT5_TERMINAL` | Path to `terminal64.exe` |
 
-This is useful if you have a non-standard MT5 installation (e.g. via CrossOver) or multiple versions installed.
+### Manual path overrides (example)
+
+If auto-discovery fails, set these in your shell (adjust `$HOME` if needed):
+
+```bash
+export RUSTMT5_WINE="/Applications/MetaTrader 5.app/Contents/SharedSupport/wine/bin/wine64"
+export RUSTMT5_TERMINAL="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/terminal64.exe"
+export RUSTMT5_EDITOR="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MetaEditor64.exe"
+```
+
+Optional: pin the Wine prefix explicitly (usually inferred automatically):
+
+```bash
+export RUSTMT5_WINEPREFIX="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5"
+```
 
 ## Project structure
 
@@ -123,6 +138,12 @@ cargo build --release
 ```
 
 The optimized binary will be at `target/release/rustmt5`. Copy it anywhere on your `$PATH`.
+
+### Run tests
+
+```bash
+cargo test
+```
 
 ### Publishing to crates.io
 
@@ -163,10 +184,11 @@ MT5 is not installed at the expected location. Use environment variables to poin
 The file path could not be canonicalized. Make sure the file exists and the path is valid.
 
 **Compiler runs but produces no output**
-The Wine path translation may be incorrect. Double-check that `wine64` can be invoked directly:
+The Wine path translation may be incorrect. Double-check that `wine64` exists and runs:
 
 ```bash
-/Applications/MetaTrader\ 5.app/Contents/MacOS/wine64 --version
+"/Applications/MetaTrader 5.app/Contents/SharedSupport/wine/bin/wine64" --version
+export WINEPREFIX="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5"
 ```
 
 **"MT5 must not already be running"**

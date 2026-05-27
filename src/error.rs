@@ -4,7 +4,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("MT5 installation not found. Searched /Applications and ~/Applications.\nSet RUSTMT5_WINE, RUSTMT5_EDITOR, and RUSTMT5_TERMINAL environment variables to specify paths manually.")]
+    #[error(
+        "MT5 installation not found.\n\
+         Expected Wine at MetaTrader 5.app/Contents/SharedSupport/wine/bin/wine64\n\
+         and MT5 binaries under ~/Library/Application Support/net.metaquotes.wine.metatrader5/.\n\
+         Set RUSTMT5_WINEPREFIX, RUSTMT5_WINE, RUSTMT5_EDITOR, and RUSTMT5_TERMINAL to override."
+    )]
     Mt5NotFound,
 
     #[error("file not found: {path}")]

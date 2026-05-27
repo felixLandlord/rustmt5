@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::process::Command;
 
 use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
@@ -17,7 +16,8 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
 
     eprintln!("Compiling {}...", file.display());
 
-    let output = Command::new(&paths.wine)
+    let output = paths
+        .wine_command()
         .arg(&paths.editor)
         .arg(format!("/compile:{wine_path}"))
         .arg("/log")
