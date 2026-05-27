@@ -192,6 +192,9 @@ MT5 is not installed at the expected location. Use environment variables to poin
 **"failed to convert path to Wine format"**
 The file path could not be canonicalized. Make sure the file exists and the path is valid.
 
+**Compile log vs Wine exit code**
+MetaEditor writes a `.log` file next to your `.mq5` (e.g. `strategy.log`) when using `/log`. `rustmt5` reads that file and treats `Result: 0 errors, ...` as success even if Wine exits with a non-zero status. Wine/HID messages on stderr are suppressed when a log file is present so you see the compiler output instead.
+
 **Compiler runs but produces no output**
 The Wine path translation may be incorrect. Double-check that `wine64` exists and runs:
 

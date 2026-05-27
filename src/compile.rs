@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
@@ -28,6 +28,39 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let log_path = log_path_for(file);
+    let log_content = read_log(&log_path);
+
+    print_compile_output(log_content.as_deref(), &stdout, &stderr);
+
+    evaluate_compile_outcome(
+        file,
+        output_dir,
+        log_content.as_deref(),
+        &stdout,
+        &stderr,
+        output.status.success(),
+    )
+}
+
+fn log_path_for(mq5: &Path) -> PathBuf {
+    mq5.with_extension("log")
+}
+
+fn read_log(path: &Path) -> Option<String> {
+    if !path.exists() {
+        return None;
+    }
+    std::fs::read_to_string(path).ok()
+}
+
+fn print_compile_output(log: Option<&str>, stdout: &str, stderr: &str) {
+    if let Some(log) = log {
+        if !log.trim().is_empty() {
+            println!("{}", log.trim_end());
+            return;
+        }
+    }
 
     if !stdout.is_empty() {
         println!("{stdout}");
@@ -35,20 +68,79 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     if !stderr.is_empty() {
         eprintln!("{stderr}");
     }
+}
 
-    if !output.status.success() {
-        return Err(Error::CompileFailed {
-            detail: format!("metaeditor64 exited with {}", output.status),
-        });
+fn evaluate_compile_outcome(
+    file: &Path,
+    output_dir: Option<&Path>,
+    log: Option<&str>,
+    stdout: &str,
+    stderr: &str,
+    exit_ok: bool,
+) -> Result<()> {
+    let combined_terminal = format!("{stdout}{stderr}");
+
+    if let Some(log) = log {
+        if let Some((errors, warnings)) = parse_compile_log(log) {
+            if errors == 0 {
+                if !exit_ok {
+                    eprintln!(
+                        "Note: MetaEditor exited with a non-zero status, but the compile log reports success."
+                    );
+                }
+                return report_success(file, output_dir, warnings);
+            }
+            return Err(Error::CompileFailed {
+                detail: format!(
+                    "compilation finished with {errors} error(s), {warnings} warning(s) (see {})",
+                    log_path_for(file).display()
+                ),
+            });
+        }
     }
 
-    let combined = format!("{stdout}{stderr}");
-    if contains_compile_errors(&combined) {
+    if contains_compile_errors(&combined_terminal) {
         return Err(Error::CompileFailed {
             detail: "compilation finished with errors (see output above)".into(),
         });
     }
 
+    if let Some(log) = log {
+        if contains_compile_errors(log) {
+            return Err(Error::CompileFailed {
+                detail: format!(
+                    "compilation finished with errors (see {})",
+                    log_path_for(file).display()
+                ),
+            });
+        }
+    }
+
+    let ex5 = file.with_extension("ex5");
+    if ex5.exists() {
+        if !exit_ok {
+            eprintln!(
+                "Note: MetaEditor exited with a non-zero status, but {} was produced.",
+                ex5.display()
+            );
+        }
+        return report_success(file, output_dir, 0);
+    }
+
+    if !exit_ok {
+        return Err(Error::CompileFailed {
+            detail: format!(
+                "metaeditor64 exited with a non-zero status and no .ex5 was produced (check {})",
+                log_path_for(file).display()
+            ),
+        });
+    }
+
+    eprintln!("Done. Check output for results.");
+    Ok(())
+}
+
+fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Result<()> {
     let ex5 = file.with_extension("ex5");
 
     if let Some(dir) = output_dir {
@@ -57,15 +149,63 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
             std::fs::copy(&ex5, &dest)?;
             eprintln!("Success: copied to {}", dest.display());
         } else {
-            eprintln!("Done. No .ex5 found to copy — check output for results.");
+            eprintln!("Compile log reports success, but no .ex5 found to copy.");
         }
     } else if ex5.exists() {
         eprintln!("Success: {}", ex5.display());
     } else {
-        eprintln!("Done. Check output for results.");
+        eprintln!("Compile log reports success (0 errors).");
+    }
+
+    if warnings > 0 {
+        eprintln!("Completed with {warnings} warning(s).");
     }
 
     Ok(())
+}
+
+/// Parse error and warning counts from a MetaEditor compile log or stdout.
+///
+/// Recognizes lines like:
+/// - `Result: 0 errors, 0 warnings, 623 ms elapsed`
+/// - `strategy.mq5 : 0 error(s), 0 warning(s)`
+pub(crate) fn parse_compile_log(log: &str) -> Option<(u32, u32)> {
+    let mut last = None;
+    for line in log.lines() {
+        if let Some(counts) = parse_error_counts_line(line.trim()) {
+            last = Some(counts);
+        }
+    }
+    last
+}
+
+fn parse_error_counts_line(line: &str) -> Option<(u32, u32)> {
+    if let Some(rest) = line.strip_prefix("Result:") {
+        return parse_errors_and_warnings(rest);
+    }
+
+    if line.contains("error(s)") {
+        let errors = parse_count_before_keyword(line, "error(s)")?;
+        let warnings = parse_count_before_keyword(line, "warning(s)")?;
+        return Some((errors, warnings));
+    }
+
+    None
+}
+
+fn parse_errors_and_warnings(fragment: &str) -> Option<(u32, u32)> {
+    let errors = parse_count_before_keyword(fragment, "error")?;
+    let warnings = parse_count_before_keyword(fragment, "warning")?;
+    Some((errors, warnings))
+}
+
+fn parse_count_before_keyword(text: &str, keyword: &str) -> Option<u32> {
+    let idx = text.find(keyword)?;
+    let before = text[..idx].trim();
+    let num = before
+        .rsplit(|c: char| c.is_whitespace() || c == ',')
+        .find(|s| !s.is_empty())?;
+    num.parse().ok()
 }
 
 pub(crate) fn validate_mq5_file(file: &Path) -> Result<()> {
@@ -110,6 +250,29 @@ pub(crate) fn contains_compile_errors(output: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SAMPLE_LOG: &str = r"
+Z:\Users\landlord\Files\me\rustmt5\examples\strategy.mq5 : information: compiling
+ : information: code generated
+Result: 0 errors, 0 warnings, 623 ms elapsed, cpu='X64 Regular'
+";
+
+    #[test]
+    fn parse_compile_log_reads_result_line() {
+        assert_eq!(parse_compile_log(SAMPLE_LOG), Some((0, 0)));
+    }
+
+    #[test]
+    fn parse_compile_log_reads_error_summary_line() {
+        let log = "strategy.mq5 : 2 error(s), 3 warning(s)\n";
+        assert_eq!(parse_compile_log(log), Some((2, 3)));
+    }
+
+    #[test]
+    fn parse_compile_log_returns_last_summary() {
+        let log = "Result: 1 errors, 0 warnings\nResult: 0 errors, 0 warnings\n";
+        assert_eq!(parse_compile_log(log), Some((0, 0)));
+    }
 
     #[test]
     fn validate_rejects_missing_file() {
@@ -222,5 +385,11 @@ mod tests {
     #[test]
     fn contains_errors_with_leading_whitespace() {
         assert!(contains_compile_errors("  MyEA.mq5 : 1 error(s), 0 warning(s)  "));
+    }
+
+    #[test]
+    fn log_path_for_replaces_extension() {
+        let mq5 = Path::new("/tmp/foo/strategy.mq5");
+        assert_eq!(log_path_for(mq5), Path::new("/tmp/foo/strategy.log"));
     }
 }
