@@ -5,12 +5,20 @@ use crate::mt5::Mt5Paths;
 use crate::wine;
 use crate::wine_output::filter_wine_noise;
 
+/// Sentinel value when `--output` is passed without a directory (clap `default_missing_value`).
+pub const OUTPUT_FLAG_DEFAULT: &str = "__DEFAULT_EXPERTS__";
+
+/// Resolve `--output` into a copy destination, if any.
+pub fn resolve_output_dir(flag: Option<String>) -> Option<PathBuf> {
+    match flag {
+        None => None,
+        Some(s) if s == OUTPUT_FLAG_DEFAULT => Some(Mt5Paths::default_experts_dir()),
+        Some(s) => Some(PathBuf::from(s)),
+    }
+}
+
 pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     validate_mq5_file(file)?;
-
-    if let Some(dir) = output_dir {
-        validate_output_dir(dir)?;
-    }
 
     let paths = Mt5Paths::discover()?;
     let wine_path = wine::to_wine_path(file)?;
@@ -159,13 +167,7 @@ fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Resu
     let ex5 = file.with_extension("ex5");
 
     if let Some(dir) = output_dir {
-        if ex5.exists() {
-            let dest = dir.join(ex5.file_name().expect("ex5 has a filename"));
-            std::fs::copy(&ex5, &dest)?;
-            eprintln!("Success: copied to {}", dest.display());
-        } else {
-            eprintln!("Compile log reports success, but no .ex5 found to copy.");
-        }
+        copy_ex5_if_possible(&ex5, dir)?;
     } else if ex5.exists() {
         eprintln!("Success: {}", ex5.display());
     } else {
@@ -176,6 +178,37 @@ fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Resu
         eprintln!("Completed with {warnings} warning(s).");
     }
 
+    Ok(())
+}
+
+/// Copy `.ex5` into `dir` when it exists. Warn and skip if the directory is missing.
+fn copy_ex5_if_possible(ex5: &Path, dir: &Path) -> Result<()> {
+    if !ex5.exists() {
+        eprintln!("Compile succeeded, but no .ex5 was found to copy.");
+        return Ok(());
+    }
+
+    if !dir.exists() {
+        eprintln!(
+            "warning: output directory does not exist, skipping copy: {}",
+            dir.display()
+        );
+        eprintln!("  compiled .ex5 remains at {}", ex5.display());
+        return Ok(());
+    }
+
+    if !dir.is_dir() {
+        eprintln!(
+            "warning: output path is not a directory, skipping copy: {}",
+            dir.display()
+        );
+        eprintln!("  compiled .ex5 remains at {}", ex5.display());
+        return Ok(());
+    }
+
+    let dest = dir.join(ex5.file_name().expect("ex5 has a filename"));
+    std::fs::copy(ex5, &dest)?;
+    eprintln!("Success: copied to {}", dest.display());
     Ok(())
 }
 
@@ -235,16 +268,6 @@ pub(crate) fn validate_mq5_file(file: &Path) -> Result<()> {
             got: other.map(String::from),
         }),
     }
-}
-
-fn validate_output_dir(dir: &Path) -> Result<()> {
-    if !dir.exists() {
-        return Err(Error::FileNotFound { path: dir.to_path_buf() });
-    }
-    if !dir.is_dir() {
-        return Err(Error::InvalidOutputDir { path: dir.to_path_buf() });
-    }
-    Ok(())
 }
 
 pub(crate) fn contains_compile_errors(output: &str) -> bool {
@@ -349,24 +372,20 @@ Result: 2 errors, 0 warnings\n";
     }
 
     #[test]
-    fn validate_output_dir_rejects_missing() {
-        let result = validate_output_dir(Path::new("/nonexistent/dir"));
-        assert!(matches!(result, Err(Error::FileNotFound { .. })));
+    fn resolve_output_dir_none_when_flag_absent() {
+        assert!(resolve_output_dir(None).is_none());
     }
 
     #[test]
-    fn validate_output_dir_rejects_file() {
-        let tmp = std::env::temp_dir().join("rustmt5_test_not_dir");
-        std::fs::write(&tmp, "test").unwrap();
-        let result = validate_output_dir(&tmp);
-        assert!(matches!(result, Err(Error::InvalidOutputDir { .. })));
-        let _ = std::fs::remove_file(&tmp);
+    fn resolve_output_dir_uses_default_experts_sentinel() {
+        let dir = resolve_output_dir(Some(OUTPUT_FLAG_DEFAULT.to_string())).unwrap();
+        assert!(dir.to_string_lossy().contains("Experts"));
     }
 
     #[test]
-    fn validate_output_dir_accepts_directory() {
-        let dir = std::env::temp_dir();
-        assert!(validate_output_dir(&dir).is_ok());
+    fn resolve_output_dir_uses_custom_path() {
+        let dir = resolve_output_dir(Some("/tmp/my-build".into())).unwrap();
+        assert_eq!(dir, PathBuf::from("/tmp/my-build"));
     }
 
     #[test]

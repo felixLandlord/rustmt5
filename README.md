@@ -17,7 +17,18 @@ cd rustmt5
 cargo install --path .
 ```
 
-The `rustmt5` binary will be available in your `$PATH`.
+The `rustmt5` binary is installed to `~/.cargo/bin/rustmt5`. If that directory is not on your `PATH`, add it to your shell profile:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+Reload your shell (or `source ~/.zshrc`) and verify:
+
+```bash
+which rustmt5
+rustmt5 --version
+```
 
 ## Usage
 
@@ -47,15 +58,23 @@ When compiling `MyEA.mq5`, MetaEditor produces two useful files next to the sour
 
 **Encoding note:** MetaEditor commonly writes `.log` files as **UTF‑16LE with a BOM**. `rustmt5` detects and decodes this automatically.
 
-#### Copy output to a specific directory
+#### Copy output to MT5 Experts or another directory
 
-Use `--output` (or `-o`) to copy the compiled `.ex5` to a directory of your choice:
+MetaEditor always writes the `.ex5` next to the source. Use `--output` (or `-o`) to copy it elsewhere after a successful compile:
 
 ```bash
+# Copy to MT5's Experts folder (default Wine install path)
+rustmt5 compile MyEA.mq5 --output
+
+# Copy to a custom directory
 rustmt5 compile MyEA.mq5 --output ./build
 ```
 
-The `.ex5` is still produced next to the source (MetaEditor's behavior), then copied to the specified directory.
+With `--output` alone (no path), the destination is `RUSTMT5_EXPERTS_DIR` if set, otherwise:
+
+`$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/`
+
+If that directory does not exist, compilation still succeeds and `rustmt5` prints a warning; the `.ex5` stays next to your `.mq5`.
 
 ### Run the strategy tester
 
@@ -72,7 +91,7 @@ Wine debug noise (toolbar/HID/MoltenVK messages) is suppressed automatically via
 Before running a test, ensure:
 
 - MT5 is **not already open** (only one terminal instance at a time)
-- The compiled EA exists as `MQL5/Experts/<Expert>.ex5` (e.g. copy `strategy.ex5` from your project)
+- The compiled EA exists as `MQL5/Experts/<Expert>.ex5` — e.g. `rustmt5 compile examples/strategy.mq5 --output`
 - Historical data exists for the `Symbol` and `Period` in your `.ini`
 
 ### Example `.ini` config
@@ -119,6 +138,7 @@ Auto-discovery works on a standard Mac MT5 install. Override any path if yours d
 | `RUSTMT5_WINE` | Path to the `wine64` binary |
 | `RUSTMT5_EDITOR` | Path to `MetaEditor64.exe` |
 | `RUSTMT5_TERMINAL` | Path to `terminal64.exe` |
+| `RUSTMT5_EXPERTS_DIR` | Directory for `compile --output` (no path). Defaults to `…/MQL5/Experts/` under the Wine prefix |
 
 ### Manual path overrides (example)
 
@@ -134,6 +154,12 @@ Optional: pin the Wine prefix explicitly (usually inferred automatically):
 
 ```bash
 export RUSTMT5_WINEPREFIX="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5"
+```
+
+Default Experts folder used by `compile --output` (optional override):
+
+```bash
+export RUSTMT5_EXPERTS_DIR="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/"
 ```
 
 ## Project structure

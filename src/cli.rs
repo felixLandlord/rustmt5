@@ -20,9 +20,15 @@ pub enum Command {
         /// Path to the .mq5 file to compile
         file: PathBuf,
 
-        /// Copy the compiled .ex5 to this directory
-        #[arg(short, long)]
-        output: Option<PathBuf>,
+        /// Copy the compiled .ex5 to MT5 Experts (--output) or to DIR (--output DIR)
+        #[arg(
+            short,
+            long,
+            num_args = 0..=1,
+            default_missing_value = "__DEFAULT_EXPERTS__",
+            value_name = "DIR"
+        )]
+        output: Option<String>,
     },
 
     /// Run the MT5 strategy tester with a configuration file

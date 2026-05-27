@@ -11,6 +11,7 @@ const WINE_BIN_REL: &str = "Contents/SharedSupport/wine/bin/wine64";
 const LEGACY_WINE_REL: &str = "Contents/MacOS/wine64";
 const LEGACY_DRIVE_C: &str = "Contents/Resources/drive_c/Program Files/MetaTrader 5";
 const DRIVE_C_MT5: &str = "drive_c/Program Files/MetaTrader 5";
+const MQL5_EXPERTS_REL: &str = "MQL5/Experts";
 
 const EDITOR_NAMES: &[&str] = &["MetaEditor64.exe", "metaeditor64.exe"];
 const TERMINAL_NAMES: &[&str] = &["terminal64.exe"];
@@ -38,6 +39,20 @@ impl Mt5Paths {
             terminal,
             wine_prefix,
         })
+    }
+
+    /// Default directory for copying compiled EAs (`MQL5/Experts` in the Wine prefix).
+    pub fn default_experts_dir() -> PathBuf {
+        if let Ok(val) = env::var("RUSTMT5_EXPERTS_DIR") {
+            return PathBuf::from(val);
+        }
+        if let Ok(home) = env::var("HOME") {
+            return Path::new(&home)
+                .join(format!("Library/Application Support/{WINE_PREFIX_DIR}"))
+                .join(DRIVE_C_MT5)
+                .join(MQL5_EXPERTS_REL);
+        }
+        PathBuf::from(MQL5_EXPERTS_REL)
     }
 
     /// Start a Wine process with `WINEPREFIX` set and Wine debug output suppressed.
@@ -312,6 +327,25 @@ mod tests {
         assert!(paths.wine.ends_with("wine64"));
         assert_eq!(paths.wine_prefix, prefix);
         assert!(paths.terminal.ends_with("terminal64.exe"));
+    }
+
+    #[test]
+    fn default_experts_dir_uses_home_layout() {
+        let _lock = env_lock();
+        env::remove_var("RUSTMT5_EXPERTS_DIR");
+        let home = env::var("HOME").expect("HOME for test");
+        let dir = Mt5Paths::default_experts_dir();
+        assert!(dir.starts_with(&home));
+        assert!(dir.to_string_lossy().contains("MQL5/Experts"));
+    }
+
+    #[test]
+    fn default_experts_dir_respects_env_override() {
+        let _lock = env_lock();
+        let custom = std::env::temp_dir().join("rustmt5_custom_experts");
+        env::set_var("RUSTMT5_EXPERTS_DIR", custom.to_str().unwrap());
+        assert_eq!(Mt5Paths::default_experts_dir(), custom);
+        env::remove_var("RUSTMT5_EXPERTS_DIR");
     }
 
     #[test]

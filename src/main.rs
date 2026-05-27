@@ -14,7 +14,10 @@ fn main() {
     let cli = cli::Cli::parse();
 
     let result = match cli.command {
-        cli::Command::Compile { ref file, ref output } => compile::run(file, output.as_deref()),
+        cli::Command::Compile { ref file, ref output } => {
+            let output_dir = compile::resolve_output_dir(output.clone());
+            compile::run(file, output_dir.as_deref())
+        }
         cli::Command::Test { ref file } => test::run(file),
     };
 
