@@ -189,12 +189,10 @@ fn copy_ex5_if_possible(ex5: &Path, dir: &Path) -> Result<()> {
     }
 
     if !dir.exists() {
-        eprintln!(
-            "warning: output directory does not exist, skipping copy: {}",
-            dir.display()
-        );
-        eprintln!("  compiled .ex5 remains at {}", ex5.display());
-        return Ok(());
+        eprintln!("Creating output directory: {}", dir.display());
+        std::fs::create_dir_all(dir).map_err(|e| Error::CompileFailed {
+            detail: format!("could not create output directory {}: {e}", dir.display()),
+        })?;
     }
 
     if !dir.is_dir() {

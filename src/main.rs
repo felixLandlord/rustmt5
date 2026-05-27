@@ -18,7 +18,10 @@ fn main() {
             let output_dir = compile::resolve_output_dir(output.clone());
             compile::run(file, output_dir.as_deref())
         }
-        cli::Command::Test { ref file } => test::run(file),
+        cli::Command::Test { ref file, ref input } => {
+            let report_dest = test::resolve_report_dest(input.clone(), file);
+            test::run(file, report_dest.as_deref())
+        }
     };
 
     if let Err(e) = result {

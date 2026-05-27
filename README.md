@@ -72,7 +72,9 @@ rustmt5 compile MyEA.mq5 --output ./build
 
 With `--output` alone (no path), the destination is `RUSTMT5_EXPERTS_DIR` if set, otherwise:
 
-`$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/`
+`$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5/Experts/rustmt5_ea/`
+
+The `rustmt5_ea/` subfolder keeps your compiled EAs organised separately from MT5's built-in examples.
 
 If that directory does not exist, compilation still succeeds and `rustmt5` prints a warning; the `.ex5` stays next to your `.mq5`.
 
@@ -82,29 +84,40 @@ If that directory does not exist, compilation still succeeds and `rustmt5` print
 rustmt5 test backtest.ini
 ```
 
-This launches MT5's strategy tester headlessly using the provided configuration. When the test finishes, `rustmt5` prints the path to the HTML report.
+This launches MT5's strategy tester headlessly using the provided configuration. When the test finishes, `rustmt5` automatically copies all report files (`.htm` + `.png` charts) back to the directory where the `.ini` lives.
 
-Reports are saved in the MT5 install directory (next to `terminal64.exe`), not in your project folder. With `Report=strategy_report` in your `.ini`, look for:
+```bash
+# Run and copy report to examples/ (same dir as the .ini)
+rustmt5 test examples/backtest.ini
 
-`$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/strategy_report.htm`
+# Copy report to a custom directory instead
+rustmt5 test examples/backtest.ini --output ./reports
+```
 
-MT5 also writes chart images alongside the report (`strategy_report.png`, etc.).
+`--output` without a path is the same as the default (copy next to the `.ini`). If the destination directory doesn't exist, `rustmt5` warns and skips the copy; the test result is not affected.
+
+MT5 always writes reports to its install directory (next to `terminal64.exe`). The report name and subfolder come from the `Report=` key in your `.ini`. With `Report=rustmt5_report/strategy_report`, MT5 writes:
+
+```
+…/MetaTrader 5/rustmt5_report/strategy_report.htm
+…/MetaTrader 5/rustmt5_report/strategy_report.png   (+ chart images)
+```
+
+`rustmt5` copies all of those files to the destination after a successful run.
 
 Wine and MoltenVK noise (Vulkan extension lists, toolbar/HID messages) is suppressed via `WINEDEBUG=-all`, `MVK_CONFIG_LOG_LEVEL=0`, and output filtering.
-
-> **Note:** There is no `--output` flag for `test` because the `.ini` file's `Report` field names the report file. Set `Report=my_report` under `[Tester]` to control the basename.
 
 Before running a test, ensure:
 
 - MT5 is **not already open** (only one terminal instance at a time)
-- The compiled EA exists as `MQL5/Experts/<Expert>.ex5` — e.g. `rustmt5 compile examples/strategy.mq5 --output`
+- The compiled EA exists under `MQL5/Experts/` — e.g. `rustmt5 compile examples/strategy.mq5 --output`
 - Historical data exists for the `Symbol` and `Period` in your `.ini`
 
 ### Example `.ini` config
 
 ```ini
 [Tester]
-Expert=MyEA
+Expert=rustmt5_ea/MyEA
 Symbol=EURUSD
 Period=H1
 FromDate=2024.01.01
@@ -114,10 +127,12 @@ Deposit=10000
 Currency=USD
 Leverage=100
 Optimization=0
-Report=backtest_result
+Report=rustmt5_report/backtest_result
 ReplaceReport=1
 ShutdownTerminal=1
 ```
+
+`Expert=rustmt5_ea/MyEA` matches the `rustmt5_ea/` subfolder that `compile --output` targets. `Report=rustmt5_report/backtest_result` keeps reports in their own subfolder inside the MT5 install directory.
 
 ### Example `.mq5` file
 

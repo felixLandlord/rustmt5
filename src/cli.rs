@@ -35,5 +35,15 @@ pub enum Command {
     Test {
         /// Path to the .ini configuration file
         file: PathBuf,
+
+        /// Copy report files to DIR (--input DIR) or next to the .ini (--input); created if absent
+        #[arg(
+            short,
+            long,
+            num_args = 0..=1,
+            default_missing_value = "__INI_DIR__",
+            value_name = "DIR"
+        )]
+        input: Option<String>,
     },
 }

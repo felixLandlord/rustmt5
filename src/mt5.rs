@@ -11,7 +11,7 @@ const WINE_BIN_REL: &str = "Contents/SharedSupport/wine/bin/wine64";
 const LEGACY_WINE_REL: &str = "Contents/MacOS/wine64";
 const LEGACY_DRIVE_C: &str = "Contents/Resources/drive_c/Program Files/MetaTrader 5";
 const DRIVE_C_MT5: &str = "drive_c/Program Files/MetaTrader 5";
-const MQL5_EXPERTS_REL: &str = "MQL5/Experts";
+const MQL5_EXPERTS_REL: &str = "MQL5/Experts/rustmt5_ea";
 
 const EDITOR_NAMES: &[&str] = &["MetaEditor64.exe", "metaeditor64.exe"];
 const TERMINAL_NAMES: &[&str] = &["terminal64.exe"];
