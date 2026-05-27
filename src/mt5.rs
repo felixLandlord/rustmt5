@@ -61,7 +61,14 @@ impl Mt5Paths {
         cmd.env("WINEPREFIX", &self.wine_prefix);
         // Silence Wine fixme/err/warn spam on stderr (toolbar, HID, MoltenVK, etc.)
         cmd.env("WINEDEBUG", "-all");
+        // MoltenVK defaults to info-level logging (long Vulkan/Metal capability dumps on stdout)
+        cmd.env("MVK_CONFIG_LOG_LEVEL", "0");
         cmd
+    }
+
+    /// MT5 installation directory inside the Wine prefix (`…/drive_c/Program Files/MetaTrader 5`).
+    pub fn install_dir(&self) -> PathBuf {
+        self.wine_prefix.join(DRIVE_C_MT5)
     }
 }
 

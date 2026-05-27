@@ -18,10 +18,55 @@ pub fn is_wine_noise(line: &str) -> bool {
         return true;
     }
 
+    if is_vulkan_or_gpu_dump(trimmed) {
+        return true;
+    }
+
     // Wine debug channel lines: "0024:fixme:...", "0024:err:toolbar:...", etc.
     if trimmed.contains(":fixme:")
         || trimmed.contains(":err:")
         || trimmed.contains(":warn:")
+    {
+        return true;
+    }
+
+    false
+}
+
+fn is_vulkan_or_gpu_dump(line: &str) -> bool {
+    if line.starts_with("VK_") {
+        return true;
+    }
+
+    if line.contains("Vulkan extension") {
+        return true;
+    }
+
+    if line.starts_with("The following") && line.contains("Vulkan") {
+        return true;
+    }
+
+    if line.starts_with("vendorID:")
+        || line.starts_with("deviceID:")
+        || line.starts_with("pipelineCacheUUID:")
+        || line.contains("GPU memory")
+    {
+        return true;
+    }
+
+    if line.starts_with("model:") && line.contains("Graphics") {
+        return true;
+    }
+
+    if line == "type: Integrated" || line == "type: Discrete" {
+        return true;
+    }
+
+    if line.contains("Metal Versions")
+        || line.starts_with("Metal Shading Language")
+        || line.starts_with("GPU Family")
+        || line.starts_with("macOS GPU Family")
+        || line.starts_with("supports the following Metal")
     {
         return true;
     }
@@ -55,5 +100,20 @@ mod tests {
     fn keeps_real_output() {
         let input = "strategy.mq5 : 0 error(s), 0 warning(s)\n";
         assert_eq!(filter_wine_noise(input), "strategy.mq5 : 0 error(s), 0 warning(s)");
+    }
+
+    #[test]
+    fn removes_vulkan_extension_listing() {
+        let input = "The following 108 Vulkan extensions are supported:\n\
+                     VK_KHR_16bit_storage v1\n\
+                     model: Intel(R) Iris(TM) Plus Graphics\n\
+                     Real output\n";
+        assert_eq!(filter_wine_noise(input), "Real output");
+    }
+
+    #[test]
+    fn removes_metal_gpu_family_lines() {
+        let input = "Metal Shading Language 3.1\nGPU Family Mac 2\nDone.\n";
+        assert_eq!(filter_wine_noise(input), "Done.");
     }
 }

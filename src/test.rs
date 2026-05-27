@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
@@ -11,6 +11,8 @@ pub fn run(file: &Path) -> Result<()> {
 
     let paths = Mt5Paths::discover()?;
     let wine_path = wine::to_wine_path(file)?;
+    let ini_content = fs::read_to_string(file)?;
+    let report_name = parse_report_name(&ini_content);
 
     eprintln!("Launching strategy tester with {}...", file.display());
 
@@ -42,8 +44,81 @@ pub fn run(file: &Path) -> Result<()> {
         });
     }
 
-    eprintln!("Strategy tester finished. Check MT5 reports directory for results.");
+    print_report_location(&paths, report_name.as_deref());
     Ok(())
+}
+
+/// Read `Report=` from the `[Tester]` section (key lookup is case-insensitive).
+pub(crate) fn parse_report_name(ini_content: &str) -> Option<String> {
+    ini_content.lines().map(str::trim).find_map(|line| {
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            return None;
+        }
+        let (key, value) = line.split_once('=')?;
+        if key.trim().eq_ignore_ascii_case("Report") {
+            let name = value.trim();
+            if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            }
+        } else {
+            None
+        }
+    })
+}
+
+/// Strategy tester reports are written next to `terminal64.exe` (MT5 install dir).
+pub(crate) fn locate_report(install_dir: &Path, basename: &str) -> Option<PathBuf> {
+    for ext in ["htm", "html"] {
+        let path = install_dir.join(format!("{basename}.{ext}"));
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn print_report_location(paths: &Mt5Paths, report_name: Option<&str>) {
+    let install_dir = paths.install_dir();
+
+    let Some(name) = report_name else {
+        eprintln!(
+            "Strategy tester finished. No Report= in .ini — set Report=my_report under [Tester] to name the output."
+        );
+        eprintln!("Reports are typically saved in: {}", install_dir.display());
+        return;
+    };
+
+    let Some(report_path) = locate_report(&install_dir, name) else {
+        eprintln!("Strategy tester finished, but report file was not found.");
+        eprintln!("  Expected: {}/{}.htm", install_dir.display(), name);
+        eprintln!("  Check Report= in your .ini and that the test completed successfully.");
+        return;
+    };
+
+    eprintln!("Strategy tester finished.");
+    eprintln!("Report: {}", report_path.display());
+
+    let related: Vec<_> = fs::read_dir(&install_dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with(name) && n != report_path.file_name().and_then(|f| f.to_str()).unwrap_or(""))
+        })
+        .collect();
+
+    if !related.is_empty() {
+        eprintln!("Related files in the same directory:");
+        for path in related {
+            eprintln!("  {}", path.display());
+        }
+    }
 }
 
 pub(crate) fn validate_ini_file(file: &Path) -> Result<()> {
@@ -173,5 +248,40 @@ mod tests {
     fn rejects_empty_path() {
         let result = validate_ini_file(Path::new(""));
         assert!(matches!(result, Err(Error::FileNotFound { .. })));
+    }
+
+    #[test]
+    fn parse_report_name_reads_tester_field() {
+        let ini = "[Tester]\nExpert=MyEA\nReport=strategy_report\n";
+        assert_eq!(
+            parse_report_name(ini).as_deref(),
+            Some("strategy_report")
+        );
+    }
+
+    #[test]
+    fn parse_report_name_is_case_insensitive() {
+        let ini = "[Tester]\nreport=MyReport\n";
+        assert_eq!(parse_report_name(ini).as_deref(), Some("MyReport"));
+    }
+
+    #[test]
+    fn parse_report_name_returns_none_when_missing() {
+        let ini = "[Tester]\nExpert=MyEA\n";
+        assert!(parse_report_name(ini).is_none());
+    }
+
+    #[test]
+    fn locate_report_finds_htm_in_install_dir() {
+        let dir = std::env::temp_dir().join("rustmt5_report_locate");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let report = dir.join("my_report.htm");
+        std::fs::write(&report, "<html></html>").unwrap();
+
+        let found = locate_report(&dir, "my_report").unwrap();
+        assert_eq!(found, report);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

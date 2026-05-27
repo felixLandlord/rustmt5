@@ -82,11 +82,17 @@ If that directory does not exist, compilation still succeeds and `rustmt5` print
 rustmt5 test backtest.ini
 ```
 
-This launches MT5's strategy tester headlessly using the provided configuration. Results are written to MT5's reports directory.
+This launches MT5's strategy tester headlessly using the provided configuration. When the test finishes, `rustmt5` prints the path to the HTML report.
 
-Wine debug noise (toolbar/HID/MoltenVK messages) is suppressed automatically via `WINEDEBUG=-all` and output filtering, so the terminal stays readable.
+Reports are saved in the MT5 install directory (next to `terminal64.exe`), not in your project folder. With `Report=strategy_report` in your `.ini`, look for:
 
-> **Note:** There is no `--output` flag for `test` because the `.ini` file's `Report` field already controls where MT5 writes its report. Set `Report=my_report` in your `.ini` to control the output filename.
+`$HOME/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/strategy_report.htm`
+
+MT5 also writes chart images alongside the report (`strategy_report.png`, etc.).
+
+Wine and MoltenVK noise (Vulkan extension lists, toolbar/HID messages) is suppressed via `WINEDEBUG=-all`, `MVK_CONFIG_LOG_LEVEL=0`, and output filtering.
+
+> **Note:** There is no `--output` flag for `test` because the `.ini` file's `Report` field names the report file. Set `Report=my_report` under `[Tester]` to control the basename.
 
 Before running a test, ensure:
 
