@@ -33,9 +33,10 @@ pub fn run(file: &Path, report_dest: Option<&Path>) -> Result<()> {
     let report_name = parse_report_name(&ini_content);
 
     // Ensure the report subdir exists inside the MT5 install dir so MT5 can write there.
+    // Normalise separators: Wine may use `\`; macOS Path needs `/`.
     if let Some(ref name) = report_name {
-        let report_path = Path::new(name.as_str());
-        if let Some(subdir) = report_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        let normalised = name.replace('\\', "/");
+        if let Some(subdir) = normalised.rfind('/').map(|i| &normalised[..i]).filter(|s| !s.is_empty()) {
             let full_subdir = paths.install_dir().join(subdir);
             if !full_subdir.exists() {
                 eprintln!("Creating report directory: {}", full_subdir.display());
@@ -96,29 +97,27 @@ fn handle_reports(paths: &Mt5Paths, report_name: Option<&str>, dest: Option<&Pat
         return;
     };
 
-    // Report files live in install_dir/<dir-part>/ and are all prefixed with <stem>.
-    let report_path = Path::new(name);
-    let stem = report_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or(name);
-    let report_dir = install_dir.join(
-        report_path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("")),
-    );
+    // Report= may use forward or back slashes as separators (Wine normalises to `\`).
+    // Replace `\` with `/` before parsing so the macOS Path sees proper components.
+    let name_normalized = name.replace('\\', "/");
+
+    // Split into optional subdirectory and stem.
+    let (report_subdir, stem): (Option<&str>, &str) = match name_normalized.rfind('/') {
+        Some(idx) => (Some(&name_normalized[..idx]), &name_normalized[idx + 1..]),
+        None => (None, &name_normalized),
+    };
+
+    let report_dir = match report_subdir.filter(|s| !s.is_empty()) {
+        Some(sub) => install_dir.join(sub),
+        None => install_dir.clone(),
+    };
 
     let html = locate_report(&report_dir, stem);
     let related = find_related_files(&report_dir, stem, html.as_deref());
 
     if html.is_none() && related.is_empty() {
         eprintln!("Strategy tester finished, but no report files were found.");
-        eprintln!(
-            "  Expected: {}/{}.htm",
-            report_dir.display(),
-            stem
-        );
+        eprintln!("  Expected: {}", report_dir.join(format!("{stem}.htm")).display());
         eprintln!("  Check Report= in your .ini and that the test completed successfully.");
         return;
     }
