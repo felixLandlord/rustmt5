@@ -19,6 +19,10 @@ pub enum Command {
     Compile {
         /// Path to the .mq5 file to compile
         file: PathBuf,
+
+        /// Copy the compiled .ex5 to this directory
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 
     /// Run the MT5 strategy tester with a configuration file

@@ -12,7 +12,7 @@ MT5 on macOS runs inside a bundled Wine wrapper. `rustmt5` finds the relevant bi
 ## Installation
 
 ```bash
-git clone https://github.com/youruser/rustmt5.git
+git clone https://github.com/felixLandlord/rustmt5.git
 cd rustmt5
 cargo install --path .
 ```
@@ -29,6 +29,16 @@ rustmt5 compile MyEA.mq5
 
 The compiler will produce a `MyEA.ex5` file alongside the source. Errors and warnings from MetaEditor are printed to the terminal.
 
+#### Copy output to a specific directory
+
+Use `--output` (or `-o`) to copy the compiled `.ex5` to a directory of your choice:
+
+```bash
+rustmt5 compile MyEA.mq5 --output ./build
+```
+
+The `.ex5` is still produced next to the source (MetaEditor's behavior), then copied to the specified directory.
+
 ### Run the strategy tester
 
 ```bash
@@ -36,6 +46,8 @@ rustmt5 test backtest.ini
 ```
 
 This launches MT5's strategy tester headlessly using the provided configuration. Results are written to MT5's reports directory.
+
+> **Note:** There is no `--output` flag for `test` because the `.ini` file's `Report` field already controls where MT5 writes its report. Set `Report=my_report` in your `.ini` to control the output filename.
 
 ### Example `.ini` config
 
@@ -51,6 +63,9 @@ Deposit=10000
 Currency=USD
 Leverage=100
 Optimization=0
+Report=backtest_result
+ReplaceReport=1
+ShutdownTerminal=1
 ```
 
 ### Example `.mq5` file
@@ -93,6 +108,52 @@ src/
 └── test.rs       # Test subcommand
 ```
 
+## Distribution
+
+### Install from source
+
+```bash
+cargo install --path .
+```
+
+### Build a release binary
+
+```bash
+cargo build --release
+```
+
+The optimized binary will be at `target/release/rustmt5`. Copy it anywhere on your `$PATH`.
+
+### Publishing to crates.io
+
+Before publishing, ensure your `Cargo.toml` has the required metadata:
+
+```toml
+[package]
+name = "rustmt5"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for compiling MQL5 and running MT5 strategy tester on macOS"
+license = "MIT"
+repository = "https://github.com/felixLandlord/rustmt5"
+keywords = ["mt5", "mql5", "metatrader", "trading", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+```
+
+Then publish:
+
+```bash
+cargo login  # authenticate with your crates.io API token
+cargo publish --dry-run  # verify everything is in order
+cargo publish
+```
+
+Once published, anyone can install it with:
+
+```bash
+cargo install rustmt5
+```
+
 ## Troubleshooting
 
 **"MT5 installation not found"**
@@ -103,12 +164,21 @@ The file path could not be canonicalized. Make sure the file exists and the path
 
 **Compiler runs but produces no output**
 The Wine path translation may be incorrect. Double-check that `wine64` can be invoked directly:
+
 ```bash
 /Applications/MetaTrader\ 5.app/Contents/MacOS/wine64 --version
 ```
 
 **"MT5 must not already be running"**
 Only one instance of MT5 can run at a time. Quit any running MT5 instance before using `rustmt5 test`.
+
+## References
+
+- [MQL5 Language Reference](https://www.mql5.com/en/docs) — full MQL5 API documentation
+- [MQL5 Programming for Traders](https://www.mql5.com/en/book) — comprehensive MQL5 programming book
+- [MT5 Command Line Backtest Discussion](https://www.mql5.com/en/forum/499821) — community thread on running backtests from the command line
+- [MQL Clangd (VS Code Extension)](https://marketplace.visualstudio.com/items?itemName=ngSoftware.mql-clangd) — MQL4/MQL5 IntelliSense and compilation in VS Code, including Wine/macOS support
+- [MT5 Platform Start & Configuration Files](https://www.metatrader5.com/en/terminal/help/start_advanced/start#configuration_file) — official documentation on `.ini` config file parameters for the strategy tester
 
 ## License
 

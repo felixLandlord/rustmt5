@@ -13,6 +13,9 @@ pub enum Error {
     #[error("expected a {expected} file, got {got:?}")]
     InvalidExtension { expected: &'static str, got: Option<String> },
 
+    #[error("output path is not a directory: {path}")]
+    InvalidOutputDir { path: PathBuf },
+
     #[error("invalid .ini config: {reason}")]
     InvalidIniFile { reason: String },
 

@@ -55,3 +55,50 @@ fn resolve_binary(env_var: &str, relative: &str) -> Result<PathBuf> {
 
     Err(Error::Mt5NotFound)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_binary_uses_env_var_when_valid() {
+        // Point to an existing file
+        let tmp = std::env::temp_dir().join("rustmt5_fake_wine");
+        std::fs::write(&tmp, "fake").unwrap();
+
+        env::set_var("RUSTMT5_TEST_RESOLVE", tmp.to_str().unwrap());
+        let result = resolve_binary("RUSTMT5_TEST_RESOLVE", "irrelevant/path");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), tmp);
+        env::remove_var("RUSTMT5_TEST_RESOLVE");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn resolve_binary_errors_when_env_points_to_missing_file() {
+        env::set_var("RUSTMT5_TEST_MISSING", "/nonexistent/binary");
+        let result = resolve_binary("RUSTMT5_TEST_MISSING", "irrelevant");
+        assert!(matches!(result, Err(Error::Mt5NotFound)));
+        env::remove_var("RUSTMT5_TEST_MISSING");
+    }
+
+    #[test]
+    fn resolve_binary_errors_when_not_found_anywhere() {
+        // Use an env var name that won't be set
+        let result = resolve_binary("RUSTMT5_NONEXISTENT_VAR_12345", "no/such/binary");
+        assert!(matches!(result, Err(Error::Mt5NotFound)));
+    }
+
+    #[test]
+    fn mt5_paths_struct_is_debug() {
+        let paths = Mt5Paths {
+            wine: PathBuf::from("/wine"),
+            editor: PathBuf::from("/editor"),
+            terminal: PathBuf::from("/terminal"),
+        };
+        let debug_str = format!("{paths:?}");
+        assert!(debug_str.contains("wine"));
+        assert!(debug_str.contains("editor"));
+        assert!(debug_str.contains("terminal"));
+    }
+}

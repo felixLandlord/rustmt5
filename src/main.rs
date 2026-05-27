@@ -13,7 +13,7 @@ fn main() {
     let cli = cli::Cli::parse();
 
     let result = match cli.command {
-        cli::Command::Compile { ref file } => compile::run(file),
+        cli::Command::Compile { ref file, ref output } => compile::run(file, output.as_deref()),
         cli::Command::Test { ref file } => test::run(file),
     };
 

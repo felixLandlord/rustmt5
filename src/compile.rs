@@ -5,8 +5,12 @@ use crate::error::{Error, Result};
 use crate::mt5::Mt5Paths;
 use crate::wine;
 
-pub fn run(file: &Path) -> Result<()> {
+pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     validate_mq5_file(file)?;
+
+    if let Some(dir) = output_dir {
+        validate_output_dir(dir)?;
+    }
 
     let paths = Mt5Paths::discover()?;
     let wine_path = wine::to_wine_path(file)?;
@@ -38,7 +42,6 @@ pub fn run(file: &Path) -> Result<()> {
         });
     }
 
-    // Check for compilation errors in output
     let combined = format!("{stdout}{stderr}");
     if contains_compile_errors(&combined) {
         return Err(Error::CompileFailed {
@@ -47,7 +50,16 @@ pub fn run(file: &Path) -> Result<()> {
     }
 
     let ex5 = file.with_extension("ex5");
-    if ex5.exists() {
+
+    if let Some(dir) = output_dir {
+        if ex5.exists() {
+            let dest = dir.join(ex5.file_name().expect("ex5 has a filename"));
+            std::fs::copy(&ex5, &dest)?;
+            eprintln!("Success: copied to {}", dest.display());
+        } else {
+            eprintln!("Done. No .ex5 found to copy — check output for results.");
+        }
+    } else if ex5.exists() {
         eprintln!("Success: {}", ex5.display());
     } else {
         eprintln!("Done. Check output for results.");
@@ -56,7 +68,7 @@ pub fn run(file: &Path) -> Result<()> {
     Ok(())
 }
 
-fn validate_mq5_file(file: &Path) -> Result<()> {
+pub(crate) fn validate_mq5_file(file: &Path) -> Result<()> {
     if !file.exists() {
         return Err(Error::FileNotFound { path: file.to_path_buf() });
     }
@@ -70,9 +82,18 @@ fn validate_mq5_file(file: &Path) -> Result<()> {
     }
 }
 
-fn contains_compile_errors(output: &str) -> bool {
+fn validate_output_dir(dir: &Path) -> Result<()> {
+    if !dir.exists() {
+        return Err(Error::FileNotFound { path: dir.to_path_buf() });
+    }
+    if !dir.is_dir() {
+        return Err(Error::InvalidOutputDir { path: dir.to_path_buf() });
+    }
+    Ok(())
+}
+
+pub(crate) fn contains_compile_errors(output: &str) -> bool {
     output.lines().any(|line| {
-        // Match lines like "file.mq5 : 1 error(s), 0 warning(s)"
         let line = line.trim();
         if let Some(pos) = line.find("error(s)") {
             let before = &line[..pos].trim_end();
@@ -84,4 +105,122 @@ fn contains_compile_errors(output: &str) -> bool {
         }
         false
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_rejects_missing_file() {
+        let result = validate_mq5_file(Path::new("/nonexistent/file.mq5"));
+        assert!(matches!(result, Err(Error::FileNotFound { .. })));
+    }
+
+    #[test]
+    fn validate_rejects_wrong_extension() {
+        let tmp = std::env::temp_dir().join("rustmt5_test_wrong_ext.txt");
+        std::fs::write(&tmp, "test").unwrap();
+        let result = validate_mq5_file(&tmp);
+        assert!(matches!(result, Err(Error::InvalidExtension { expected: ".mq5", .. })));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn validate_accepts_mq5_case_insensitive() {
+        let tmp = std::env::temp_dir().join("rustmt5_test_case.MQ5");
+        std::fs::write(&tmp, "test").unwrap();
+        assert!(validate_mq5_file(&tmp).is_ok());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn validate_rejects_no_extension() {
+        let tmp = std::env::temp_dir().join("rustmt5_test_no_ext");
+        std::fs::write(&tmp, "test").unwrap();
+        let result = validate_mq5_file(&tmp);
+        assert!(matches!(result, Err(Error::InvalidExtension { got: None, .. })));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn validate_output_dir_rejects_missing() {
+        let result = validate_output_dir(Path::new("/nonexistent/dir"));
+        assert!(matches!(result, Err(Error::FileNotFound { .. })));
+    }
+
+    #[test]
+    fn validate_output_dir_rejects_file() {
+        let tmp = std::env::temp_dir().join("rustmt5_test_not_dir");
+        std::fs::write(&tmp, "test").unwrap();
+        let result = validate_output_dir(&tmp);
+        assert!(matches!(result, Err(Error::InvalidOutputDir { .. })));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn validate_output_dir_accepts_directory() {
+        let dir = std::env::temp_dir();
+        assert!(validate_output_dir(&dir).is_ok());
+    }
+
+    #[test]
+    fn contains_errors_detects_nonzero() {
+        assert!(contains_compile_errors("MyEA.mq5 : 2 error(s), 0 warning(s)"));
+    }
+
+    #[test]
+    fn contains_errors_ignores_zero() {
+        assert!(!contains_compile_errors("MyEA.mq5 : 0 error(s), 3 warning(s)"));
+    }
+
+    #[test]
+    fn contains_errors_handles_empty() {
+        assert!(!contains_compile_errors(""));
+    }
+
+    #[test]
+    fn contains_errors_handles_no_match() {
+        assert!(!contains_compile_errors("Compiling MyEA.mq5\nDone."));
+    }
+
+    #[test]
+    fn contains_errors_multiline() {
+        let output = "MyEA.mq5(5,3) : error 182: 'Prnt' - undeclared identifier\n\
+                       MyEA.mq5 : 1 error(s), 0 warning(s)";
+        assert!(contains_compile_errors(output));
+    }
+
+    #[test]
+    fn validate_rejects_empty_path() {
+        let result = validate_mq5_file(Path::new(""));
+        assert!(matches!(result, Err(Error::FileNotFound { .. })));
+    }
+
+    #[test]
+    fn validate_mq5_with_dots_in_name() {
+        let tmp = std::env::temp_dir().join("my.ea.v2.mq5");
+        std::fs::write(&tmp, "test").unwrap();
+        assert!(validate_mq5_file(&tmp).is_ok());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn validate_rejects_mq4_extension() {
+        let tmp = std::env::temp_dir().join("rustmt5_test_mq4.mq4");
+        std::fs::write(&tmp, "test").unwrap();
+        let result = validate_mq5_file(&tmp);
+        assert!(matches!(result, Err(Error::InvalidExtension { .. })));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn contains_errors_ignores_warning_only_lines() {
+        assert!(!contains_compile_errors("MyEA.mq5 : 0 error(s), 5 warning(s)"));
+    }
+
+    #[test]
+    fn contains_errors_with_leading_whitespace() {
+        assert!(contains_compile_errors("  MyEA.mq5 : 1 error(s), 0 warning(s)  "));
+    }
 }
