@@ -14,6 +14,16 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     let paths = Mt5Paths::discover()?;
     let wine_path = wine::to_wine_path(file)?;
 
+    // MetaEditor writes the .log next to the .mq5 using the canonical path,
+    // so resolve it the same way to find the log after compile.
+    let canonical_file = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+    let log_path = log_path_for(&canonical_file);
+
+    // Remove stale log so we only read a fresh one after compile
+    let _ = std::fs::remove_file(&log_path);
+    // Also remove any log at the non-canonical path
+    let _ = std::fs::remove_file(log_path_for(file));
+
     eprintln!("Compiling {}...", file.display());
 
     let output = paths
@@ -28,19 +38,29 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let log_path = log_path_for(file);
-    let log_content = read_log(&log_path);
+    // MetaEditor writes the log file next to the source, but under Wine the file can
+    // appear a moment after the process exits. Wait briefly for it.
+    let log_content = wait_and_read_log(file, &log_path);
 
-    print_compile_output(log_content.as_deref(), &stdout, &stderr);
+    // Print the compile log if available, otherwise fall back to
+    // stdout/stderr with Wine noise filtered out.
+    if let Some(ref log) = log_content {
+        if !log.trim().is_empty() {
+            // Print to stdout so it becomes the primary output.
+            println!("{}", log.trim_end());
+        }
+    } else {
+        let filtered = filter_wine_noise(&stdout);
+        if !filtered.is_empty() {
+            println!("{filtered}");
+        }
+        let filtered_err = filter_wine_noise(&stderr);
+        if !filtered_err.is_empty() {
+            eprintln!("{filtered_err}");
+        }
+    }
 
-    evaluate_compile_outcome(
-        file,
-        output_dir,
-        log_content.as_deref(),
-        &stdout,
-        &stderr,
-        output.status.success(),
-    )
+    evaluate_compile_outcome(file, output_dir, log_content.as_deref(), &stdout, &stderr)
 }
 
 fn log_path_for(mq5: &Path) -> PathBuf {
@@ -51,23 +71,72 @@ fn read_log(path: &Path) -> Option<String> {
     if !path.exists() {
         return None;
     }
-    std::fs::read_to_string(path).ok()
+    let bytes = std::fs::read(path).ok()?;
+    decode_text_file(&bytes)
 }
 
-fn print_compile_output(log: Option<&str>, stdout: &str, stderr: &str) {
-    if let Some(log) = log {
-        if !log.trim().is_empty() {
-            println!("{}", log.trim_end());
-            return;
+fn decode_text_file(bytes: &[u8]) -> Option<String> {
+    // MetaEditor commonly writes logs as UTF-16LE with BOM.
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        // Interpret as UTF-16LE.
+        let mut u16s = Vec::with_capacity((bytes.len().saturating_sub(2)) / 2);
+        for chunk in bytes[2..].chunks_exact(2) {
+            u16s.push(u16::from_le_bytes([chunk[0], chunk[1]]));
         }
+        return Some(String::from_utf16_lossy(&u16s));
     }
 
-    if !stdout.is_empty() {
-        println!("{stdout}");
+    // UTF-8 (or ASCII) fallback.
+    std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+}
+
+fn wait_and_read_log(mq5: &Path, canonical_log_path: &Path) -> Option<String> {
+    let relative_log_path = log_path_for(mq5);
+
+    for _ in 0..50 {
+        if let Some(content) = read_log(canonical_log_path) {
+            if !content.trim().is_empty() {
+                return Some(content);
+            }
+        }
+        if let Some(content) = read_log(&relative_log_path) {
+            if !content.trim().is_empty() {
+                return Some(content);
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    if !stderr.is_empty() {
-        eprintln!("{stderr}");
+
+    read_log(canonical_log_path).or_else(|| read_log(&relative_log_path))
+}
+
+/// Filter out Wine diagnostic noise that is irrelevant to MQL5 compilation.
+fn filter_wine_noise(text: &str) -> String {
+    text.lines()
+        .filter(|line| !is_wine_noise(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_wine_noise(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return false;
     }
+    // Wine debug prefixes: "XXXX:fixme:", "XXXX:err:", "XXXX:warn:"
+    if let Some(rest) = trimmed.get(5..) {
+        if rest.starts_with("fixme:")
+            || rest.starts_with("err:")
+            || rest.starts_with("warn:")
+        {
+            return true;
+        }
+    }
+    // MoltenVK info
+    if trimmed.starts_with("[mvk-") {
+        return true;
+    }
+    false
 }
 
 fn evaluate_compile_outcome(
@@ -76,68 +145,42 @@ fn evaluate_compile_outcome(
     log: Option<&str>,
     stdout: &str,
     stderr: &str,
-    exit_ok: bool,
 ) -> Result<()> {
-    let combined_terminal = format!("{stdout}{stderr}");
-
+    // 1. If we have a log file with a parseable result line, trust it
     if let Some(log) = log {
         if let Some((errors, warnings)) = parse_compile_log(log) {
             if errors == 0 {
-                if !exit_ok {
-                    eprintln!(
-                        "Note: MetaEditor exited with a non-zero status, but the compile log reports success."
-                    );
-                }
                 return report_success(file, output_dir, warnings);
             }
             return Err(Error::CompileFailed {
                 detail: format!(
-                    "compilation finished with {errors} error(s), {warnings} warning(s) (see {})",
-                    log_path_for(file).display()
+                    "compilation finished with {errors} error(s), {warnings} warning(s)"
                 ),
             });
         }
     }
 
-    if contains_compile_errors(&combined_terminal) {
+    // 2. Check terminal output for error summaries
+    let combined = format!("{stdout}{stderr}");
+    if contains_compile_errors(&combined) {
         return Err(Error::CompileFailed {
             detail: "compilation finished with errors (see output above)".into(),
         });
     }
 
-    if let Some(log) = log {
-        if contains_compile_errors(log) {
-            return Err(Error::CompileFailed {
-                detail: format!(
-                    "compilation finished with errors (see {})",
-                    log_path_for(file).display()
-                ),
-            });
-        }
-    }
-
+    // 3. If .ex5 was produced, treat as success
     let ex5 = file.with_extension("ex5");
     if ex5.exists() {
-        if !exit_ok {
-            eprintln!(
-                "Note: MetaEditor exited with a non-zero status, but {} was produced.",
-                ex5.display()
-            );
-        }
         return report_success(file, output_dir, 0);
     }
 
-    if !exit_ok {
-        return Err(Error::CompileFailed {
-            detail: format!(
-                "metaeditor64 exited with a non-zero status and no .ex5 was produced (check {})",
-                log_path_for(file).display()
-            ),
-        });
-    }
-
-    eprintln!("Done. Check output for results.");
-    Ok(())
+    // 4. No log, no ex5, no clear errors — ambiguous
+    Err(Error::CompileFailed {
+        detail: format!(
+            "no .ex5 produced and no compile log found (check {})",
+            log_path_for(file).display()
+        ),
+    })
 }
 
 fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Result<()> {
@@ -154,7 +197,7 @@ fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Resu
     } else if ex5.exists() {
         eprintln!("Success: {}", ex5.display());
     } else {
-        eprintln!("Compile log reports success (0 errors).");
+        eprintln!("Compile log reports 0 errors.");
     }
 
     if warnings > 0 {
@@ -164,7 +207,7 @@ fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Resu
     Ok(())
 }
 
-/// Parse error and warning counts from a MetaEditor compile log or stdout.
+/// Parse error and warning counts from a MetaEditor compile log.
 ///
 /// Recognizes lines like:
 /// - `Result: 0 errors, 0 warnings, 623 ms elapsed`
@@ -251,15 +294,25 @@ pub(crate) fn contains_compile_errors(output: &str) -> bool {
 mod tests {
     use super::*;
 
-    const SAMPLE_LOG: &str = r"
-Z:\Users\landlord\Files\me\rustmt5\examples\strategy.mq5 : information: compiling
- : information: code generated
-Result: 0 errors, 0 warnings, 623 ms elapsed, cpu='X64 Regular'
-";
+    const SAMPLE_LOG: &str = "\n\n\
+Z:\\Users\\landlord\\examples\\strategy.mq5 : information: compiling\n\
+ : information: code generated\n\
+Result: 0 errors, 0 warnings, 623 ms elapsed, cpu='X64 Regular'\n";
+
+    const ERROR_LOG: &str = "\n\n\
+Z:\\Users\\landlord\\examples\\strategy_error.mq5 : information: compiling\n\
+Z:\\Users\\landlord\\examples\\strategy_error.mq5(36,4) : error 256: undeclared identifier 'Prnt'\n\
+Z:\\Users\\landlord\\examples\\strategy_error.mq5(36,10) : error 152: 'Hello' - some operator expected\n\
+Result: 2 errors, 0 warnings\n";
 
     #[test]
     fn parse_compile_log_reads_result_line() {
         assert_eq!(parse_compile_log(SAMPLE_LOG), Some((0, 0)));
+    }
+
+    #[test]
+    fn parse_compile_log_detects_errors() {
+        assert_eq!(parse_compile_log(ERROR_LOG), Some((2, 0)));
     }
 
     #[test]
@@ -272,6 +325,63 @@ Result: 0 errors, 0 warnings, 623 ms elapsed, cpu='X64 Regular'
     fn parse_compile_log_returns_last_summary() {
         let log = "Result: 1 errors, 0 warnings\nResult: 0 errors, 0 warnings\n";
         assert_eq!(parse_compile_log(log), Some((0, 0)));
+    }
+
+    #[test]
+    fn parse_compile_log_returns_none_for_no_summary() {
+        assert_eq!(parse_compile_log("just some text\n"), None);
+    }
+
+    #[test]
+    fn filter_wine_noise_removes_fixme() {
+        let input = "01d4:fixme:thread:get_thread_times not implemented\nReal output\n";
+        assert_eq!(filter_wine_noise(input), "Real output");
+    }
+
+    #[test]
+    fn filter_wine_noise_removes_err() {
+        let input = "00bc:err:hid:handle_DeviceMatchingCallback Ignoring HID\n";
+        assert_eq!(filter_wine_noise(input), "");
+    }
+
+    #[test]
+    fn filter_wine_noise_removes_moltenvk() {
+        let input = "[mvk-info] MoltenVK version 1.2.7\nActual line\n";
+        assert_eq!(filter_wine_noise(input), "Actual line");
+    }
+
+    #[test]
+    fn filter_wine_noise_keeps_real_output() {
+        let input = "strategy.mq5 : 0 error(s), 0 warning(s)\n";
+        assert_eq!(filter_wine_noise(input), "strategy.mq5 : 0 error(s), 0 warning(s)");
+    }
+
+    #[test]
+    fn filter_wine_noise_preserves_empty_lines() {
+        let input = "line1\n\nline2\n";
+        assert_eq!(filter_wine_noise(input), "line1\n\nline2");
+    }
+
+    #[test]
+    fn is_wine_noise_detects_all_patterns() {
+        assert!(is_wine_noise("01d4:fixme:thread:something"));
+        assert!(is_wine_noise("00bc:err:hid:something"));
+        assert!(is_wine_noise("003c:warn:something:else"));
+        assert!(is_wine_noise("[mvk-info] stuff"));
+        assert!(!is_wine_noise("Result: 0 errors, 0 warnings"));
+        assert!(!is_wine_noise(""));
+    }
+
+    #[test]
+    fn decode_text_file_decodes_utf16le_bom() {
+        // "\r\n\r\nResult: 0 errors, 0 warnings\r\n" encoded as UTF-16LE with BOM.
+        let s = "\r\n\r\nResult: 0 errors, 0 warnings\r\n";
+        let mut bytes = vec![0xFF, 0xFE];
+        for u in s.encode_utf16() {
+            bytes.extend_from_slice(&u.to_le_bytes());
+        }
+        let decoded = decode_text_file(&bytes).unwrap();
+        assert!(decoded.contains("Result: 0 errors, 0 warnings"));
     }
 
     #[test]
