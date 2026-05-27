@@ -9,16 +9,22 @@ use crate::wine_output::filter_wine_noise;
 /// Sentinel used by clap when `--output` is passed without a directory.
 pub const OUTPUT_FLAG_INI_DIR: &str = "__INI_DIR__";
 
-/// Resolve `--output` into a copy destination.
+/// Local report directory: `output/test/` next to the `.ini`.
+pub fn default_report_dest(ini_file: &Path) -> PathBuf {
+    ini_file
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("output/test")
+}
+
+/// Resolve `--input` into a copy destination.
 ///
-/// - `None`               → default: directory of the `.ini` file
-/// - `Some("__INI_DIR__")`→ same default (flag passed without value)
-/// - `Some("/some/path")` → explicit directory
+/// - `None` / `Some("__INI_DIR__")` → `output/test/` next to the `.ini`
+/// - `Some("/some/path")`           → explicit directory
 pub fn resolve_report_dest(flag: Option<String>, ini_file: &Path) -> Option<PathBuf> {
     let raw = flag.unwrap_or_else(|| OUTPUT_FLAG_INI_DIR.to_string());
     if raw == OUTPUT_FLAG_INI_DIR {
-        // Default: copy next to the .ini
-        ini_file.parent().map(PathBuf::from)
+        Some(default_report_dest(ini_file))
     } else {
         Some(PathBuf::from(raw))
     }
@@ -415,17 +421,17 @@ mod tests {
     }
 
     #[test]
-    fn resolve_report_dest_defaults_to_ini_dir() {
+    fn resolve_report_dest_defaults_to_output_test() {
         let ini = std::env::temp_dir().join("sub/backtest.ini");
         let dest = resolve_report_dest(None, &ini).unwrap();
-        assert_eq!(dest, std::env::temp_dir().join("sub"));
+        assert_eq!(dest, std::env::temp_dir().join("sub/output/test"));
     }
 
     #[test]
-    fn resolve_report_dest_sentinel_equals_ini_dir() {
+    fn resolve_report_dest_sentinel_equals_output_test() {
         let ini = std::env::temp_dir().join("sub/backtest.ini");
         let dest = resolve_report_dest(Some(OUTPUT_FLAG_INI_DIR.to_string()), &ini).unwrap();
-        assert_eq!(dest, std::env::temp_dir().join("sub"));
+        assert_eq!(dest, std::env::temp_dir().join("sub/output/test"));
     }
 
     #[test]

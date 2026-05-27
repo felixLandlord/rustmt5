@@ -47,20 +47,13 @@ rustmt5 test --help         # test subcommand options
 rustmt5 compile MyEA.mq5
 ```
 
-The compiler will produce a `MyEA.ex5` file alongside the source. Errors and warnings from MetaEditor are printed to the terminal.
-
-#### Compile artifacts: `.ex5` and `.log`
-
-When compiling `MyEA.mq5`, MetaEditor produces two useful files next to the source:
-
-- **`MyEA.ex5`**: the compiled binary used by MT5 (this is what you run in the terminal / tester).
-- **`MyEA.log`**: the compiler log. `rustmt5` prints this log to the terminal, and uses it as the source of truth for whether compilation succeeded (e.g. `Result: 0 errors, 0 warnings`).
+MetaEditor writes `.ex5` and `.log` next to the source during compile; after every run (success or failure) `rustmt5` moves them into **`output/compile/`** next to the `.mq5` (e.g. `examples/output/compile/strategy.log`). The log is still printed to the terminal and used to detect errors.
 
 **Encoding note:** MetaEditor commonly writes `.log` files as **UTF‑16LE with a BOM**. `rustmt5` detects and decodes this automatically.
 
-#### Copy output to MT5 Experts or another directory
+#### Deploy to MT5 Experts with `--output`
 
-MetaEditor always writes the `.ex5` next to the source. Use `--output` (or `-o`) to copy it elsewhere after a successful compile:
+Use `--output` (or `-o`) to **also** copy the `.ex5` to MT5's Experts folder (or another path) for testing — separate from `output/compile/`:
 
 ```bash
 # Copy to MT5's Experts folder (default Wine install path)
@@ -76,7 +69,7 @@ With `--output` alone (no path), the destination is `RUSTMT5_EXPERTS_DIR` if set
 
 The `rustmt5_ea/` subfolder keeps your compiled EAs organised separately from MT5's built-in examples.
 
-If that directory does not exist, compilation still succeeds and `rustmt5` prints a warning; the `.ex5` stays next to your `.mq5`.
+The Experts directory is created automatically if it does not exist.
 
 ### Run the strategy tester
 
@@ -84,17 +77,16 @@ If that directory does not exist, compilation still succeeds and `rustmt5` print
 rustmt5 test backtest.ini
 ```
 
-This launches MT5's strategy tester headlessly using the provided configuration. When the test finishes, `rustmt5` automatically copies all report files (`.htm` + `.png` charts) back to the directory where the `.ini` lives.
+This launches MT5's strategy tester headlessly. When the test finishes, report files (`.htm` + `.png`) are copied from the MT5 install directory into **`output/test/`** next to the `.ini` (e.g. `examples/output/test/strategy_report.htm`).
 
 ```bash
-# Run and copy report to examples/ (same dir as the .ini)
 rustmt5 test examples/backtest.ini
 
-# Copy report to a custom directory instead
-rustmt5 test examples/backtest.ini --output ./reports
+# Copy reports somewhere else instead
+rustmt5 test examples/backtest.ini --input ./reports
 ```
 
-`--output` without a path is the same as the default (copy next to the `.ini`). If the destination directory doesn't exist, `rustmt5` warns and skips the copy; the test result is not affected.
+`--input` without a path uses `output/test/` (same as the default). The directory is created if it does not exist.
 
 MT5 always writes reports to its install directory (next to `terminal64.exe`). The report name and subfolder come from the `Report=` key in your `.ini`. With `Report=rustmt5_report/strategy_report`, MT5 writes:
 

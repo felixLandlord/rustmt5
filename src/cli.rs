@@ -36,7 +36,7 @@ pub enum Command {
         /// Path to the .ini configuration file
         file: PathBuf,
 
-        /// Copy report files to DIR (--input DIR) or next to the .ini (--input); created if absent
+        /// Copy reports to output/test/ (--input) or to DIR (--input DIR); created if absent
         #[arg(
             short,
             long,

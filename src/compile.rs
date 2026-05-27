@@ -8,6 +8,14 @@ use crate::wine_output::filter_wine_noise;
 /// Sentinel value when `--output` is passed without a directory (clap `default_missing_value`).
 pub const OUTPUT_FLAG_DEFAULT: &str = "__DEFAULT_EXPERTS__";
 
+/// Local artifact directory: `output/compile/` next to the `.mq5`.
+pub fn compile_artifacts_dir(mq5_file: &Path) -> PathBuf {
+    mq5_file
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("output/compile")
+}
+
 /// Resolve `--output` into a copy destination, if any.
 pub fn resolve_output_dir(flag: Option<String>) -> Option<PathBuf> {
     match flag {
@@ -69,7 +77,20 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
         }
     }
 
-    evaluate_compile_outcome(file, output_dir, log_content.as_deref(), &stdout, &stderr)
+    let result = evaluate_compile_outcome(
+        file,
+        output_dir,
+        log_content.as_deref(),
+        &stdout,
+        &stderr,
+    );
+
+    // Move .ex5 / .log into output/compile/ whether compile succeeded or failed
+    if let Err(e) = organize_compile_artifacts(file) {
+        eprintln!("warning: could not move compile artifacts: {e}");
+    }
+
+    result
 }
 
 fn log_path_for(mq5: &Path) -> PathBuf {
@@ -166,10 +187,11 @@ fn evaluate_compile_outcome(
 fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Result<()> {
     let ex5 = file.with_extension("ex5");
 
+    // Optional: deploy .ex5 to MT5 Experts (or another path) via --output
     if let Some(dir) = output_dir {
         copy_ex5_if_possible(&ex5, dir)?;
     } else if ex5.exists() {
-        eprintln!("Success: {}", ex5.display());
+        eprintln!("Success: {}", compile_artifacts_dir(file).join(ex5.file_name().unwrap()).display());
     } else {
         eprintln!("Compile log reports 0 errors.");
     }
@@ -179,6 +201,59 @@ fn report_success(file: &Path, output_dir: Option<&Path>, warnings: u32) -> Resu
     }
 
     Ok(())
+}
+
+/// Move compile artifacts into `output/compile/` next to the `.mq5`.
+fn organize_compile_artifacts(mq5: &Path) -> Result<()> {
+    let ex5 = mq5.with_extension("ex5");
+    let log = log_path_for(mq5);
+    let canonical_log = mq5
+        .canonicalize()
+        .unwrap_or_else(|_| mq5.to_path_buf())
+        .with_extension("log");
+
+    let dest_dir = compile_artifacts_dir(mq5);
+    if !dest_dir.exists() {
+        eprintln!("Creating output directory: {}", dest_dir.display());
+        std::fs::create_dir_all(&dest_dir).map_err(|e| Error::CompileFailed {
+            detail: format!("could not create {}: {e}", dest_dir.display()),
+        })?;
+    }
+
+    let mut moved = false;
+    if move_artifact_if_exists(&ex5, &dest_dir)? {
+        moved = true;
+    }
+    if move_artifact_if_exists(&log, &dest_dir)? {
+        moved = true;
+    }
+    if canonical_log != log && move_artifact_if_exists(&canonical_log, &dest_dir)? {
+        moved = true;
+    }
+
+    if moved {
+        eprintln!("Artifacts saved to {}", dest_dir.display());
+    }
+
+    Ok(())
+}
+
+fn move_artifact_if_exists(src: &Path, dest_dir: &Path) -> Result<bool> {
+    if !src.is_file() {
+        return Ok(false);
+    }
+    let name = src.file_name().expect("artifact has a filename");
+    let dest = dest_dir.join(name);
+    if dest.exists() {
+        std::fs::remove_file(&dest)?;
+    }
+    std::fs::rename(src, &dest).or_else(|_| {
+        std::fs::copy(src, &dest)?;
+        std::fs::remove_file(src)?;
+        Ok::<(), std::io::Error>(())
+    })?;
+    eprintln!("  {}", dest.display());
+    Ok(true)
 }
 
 /// Copy `.ex5` into `dir` when it exists. Warn and skip if the directory is missing.
@@ -384,6 +459,15 @@ Result: 2 errors, 0 warnings\n";
     fn resolve_output_dir_uses_custom_path() {
         let dir = resolve_output_dir(Some("/tmp/my-build".into())).unwrap();
         assert_eq!(dir, PathBuf::from("/tmp/my-build"));
+    }
+
+    #[test]
+    fn compile_artifacts_dir_is_next_to_mq5() {
+        let mq5 = Path::new("/tmp/project/MyEA.mq5");
+        assert_eq!(
+            compile_artifacts_dir(mq5),
+            PathBuf::from("/tmp/project/output/compile")
+        );
     }
 
     #[test]
