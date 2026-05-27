@@ -1,0 +1,10 @@
+[package]
+name = "rustmt5"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for compiling MQL5 and running MT5 strategy tester on macOS"
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
