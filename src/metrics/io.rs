@@ -22,7 +22,7 @@ pub fn write_report(
     entry: ReportEntry,
     output: Option<PathBuf>,
     append: Option<&Path>,
-) -> Result<(PathBuf, u32)> {
+) -> Result<(PathBuf, u32, Vec<u32>)> {
     let out_path = if let Some(append_path) = append {
         append_path.to_path_buf()
     } else {
@@ -39,6 +39,8 @@ pub fn write_report(
     } else {
         MetricsFile { reports: vec![] }
     };
+
+    let duplicate_of = ReportEntry::duplicate_ids_in(&file.reports, &entry);
 
     let next_id = file
         .reports
@@ -59,7 +61,7 @@ pub fn write_report(
         .map_err(|e| MetricsError::InvalidJson(e.to_string()))?;
     fs::write(&out_path, json).map_err(|e| MetricsError::InvalidJson(e.to_string()))?;
 
-    Ok((out_path, next_id))
+    Ok((out_path, next_id, duplicate_of))
 }
 
 pub fn load_metrics_file(path: &Path) -> Result<MetricsFile> {
@@ -123,12 +125,30 @@ mod tests {
         let path = dir.join("metrics.json");
         let report = Path::new("report.htm");
 
-        let (_, id1) = write_report(report, minimal_entry(), Some(path.clone()), None).unwrap();
-        let (_, id2) = write_report(report, minimal_entry(), None, Some(&path)).unwrap();
+        let (_, id1, d1) = write_report(report, minimal_entry(), Some(path.clone()), None).unwrap();
+        let (_, id2, d2) = write_report(report, minimal_entry(), None, Some(&path)).unwrap();
+        let (_, id3, d3) = write_report(report, minimal_entry(), None, Some(&path)).unwrap();
         assert_eq!(id1, 1);
         assert_eq!(id2, 2);
+        assert_eq!(id3, 3);
+        assert!(d1.is_empty());
+        assert_eq!(d2, vec![1]);
+        assert_eq!(d3, vec![2, 1]);
         let file = load_metrics_file(&path).unwrap();
-        assert_eq!(file.reports.len(), 2);
+        assert_eq!(file.reports.len(), 3);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn duplicate_ids_sorted_descending() {
+        let a = minimal_entry();
+        let mut b = minimal_entry();
+        b.results.insert("profit_factor".into(), json!(2.0));
+        let existing = vec![
+            ReportEntry { id: 1, ..a.clone() },
+            ReportEntry { id: 5, ..a.clone() },
+            ReportEntry { id: 3, ..b },
+        ];
+        assert_eq!(ReportEntry::duplicate_ids_in(&existing, &a), vec![5, 1]);
     }
 }

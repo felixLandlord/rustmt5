@@ -8,14 +8,32 @@ pub struct MetricsFile {
     pub reports: Vec<ReportEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReportEntry {
     pub id: u32,
     pub settings: ReportSettings,
     pub results: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl ReportEntry {
+    /// Compare settings and results, ignoring report id.
+    pub fn content_eq(&self, other: &ReportEntry) -> bool {
+        self.settings == other.settings && self.results == other.results
+    }
+
+    /// IDs of existing reports with identical content (highest id first).
+    pub fn duplicate_ids_in(existing: &[ReportEntry], new: &ReportEntry) -> Vec<u32> {
+        let mut ids: Vec<u32> = existing
+            .iter()
+            .filter(|r| r.content_eq(new))
+            .map(|r| r.id)
+            .collect();
+        ids.sort_by(|a, b| b.cmp(a));
+        ids
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReportSettings {
     pub expert: String,
     pub symbol: String,
@@ -27,7 +45,7 @@ pub struct ReportSettings {
     pub leverage: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PeriodSettings {
     pub timeframe: String,
     pub from_date: String,

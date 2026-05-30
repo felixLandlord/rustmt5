@@ -45,19 +45,36 @@ pub fn run(
     let valid_count = count_valid_metrics(&entry.results);
     let total = schema::metric_count();
 
-    let (out_path, report_id) = io::write_report(report_path, entry, output, append)?;
+    let (out_path, report_id, duplicate_of) =
+        io::write_report(report_path, entry, output, append)?;
 
-    print_success(&stem, valid_count, total, report_id, &out_path);
+    print_success(&stem, valid_count, total, report_id, &duplicate_of, &out_path);
     Ok(())
 }
 
-fn print_success(report_name: &str, valid: usize, total: usize, id: u32, path: &Path) {
+fn print_success(
+    report_name: &str,
+    valid: usize,
+    total: usize,
+    id: u32,
+    duplicate_of: &[u32],
+    path: &Path,
+) {
     let rel = path
         .strip_prefix(std::env::current_dir().unwrap_or_default())
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| path.display().to_string());
     println!("✓ Extracted metrics from {report_name}.htm");
     println!("  Metrics: {valid} / {total} present and valid");
-    println!("  Report ID: {id}");
+    if duplicate_of.is_empty() {
+        println!("  Report ID: {id}");
+    } else {
+        let ids = duplicate_of
+            .iter()
+            .map(|i| format!("ID {i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("  Report ID: {id} - duplicate of [{ids}]");
+    }
     println!("  Saved to: {rel}");
 }

@@ -281,8 +281,13 @@ rustmt5 compile examples/strategy.mq5 --output
 rustmt5 test examples/backtest.ini
 
 # 3. Extract metrics → examples/output/metrics/
+# Overwrites
 rustmt5 metrics examples/output/test/strategy_report.htm \
   -o examples/output/metrics/strategy_report.json
+
+# Appends (no overwrite)
+rustmt5 metrics examples/output/test/other_report.htm \
+  --append examples/output/metrics/strategy_report.json
 
 # 4. Score (prints to terminal; reads config + metrics from examples/)
 rustmt5 score examples/score.toml examples/output/metrics/strategy_report.json
