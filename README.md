@@ -271,6 +271,23 @@ Once published, anyone can install it with:
 cargo install rustmt5
 ```
 
+## Example Usage of Commands (compile, test, metrics, score)
+
+```cli
+# 1. Compile (deploys .ex5 to MT5 Experts; artifacts → examples/output/compile/)
+rustmt5 compile examples/strategy.mq5 --output
+
+# 2. Backtest (reports → examples/output/test/ by default)
+rustmt5 test examples/backtest.ini
+
+# 3. Extract metrics → examples/output/metrics/
+rustmt5 metrics examples/output/test/strategy_report.htm \
+  -o examples/output/metrics/strategy_report.json
+
+# 4. Score (prints to terminal; reads config + metrics from examples/)
+rustmt5 score examples/score.toml examples/output/metrics/strategy_report.json
+```
+
 ## Troubleshooting
 
 **"MT5 installation not found"**
