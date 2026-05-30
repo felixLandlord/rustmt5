@@ -243,17 +243,78 @@ total_net_profit_below = 0.0
 
 | JSON metric key | TOML disqualifier prefix |
 |---|---|
+| `history_quality_%` | `history_quality_percent` |
+| `bars` | `bars` |
+| `total_net_profit` | `total_net_profit` |
+| `gross_profit` | `gross_profit` |
+| `gross_loss` | `gross_loss` |
 | `profit_factor` | `profit_factor` |
-| `balance_drawdown_maximal_%` | `balance_drawdown_maximal_percent` |
-| `profit_trades_% (of total)` | `profit_trades_percent_of_total` |
-| `correlation (Profits, MFE)` | `correlation_profits_mfe` |
+| `recovery_factor` | `recovery_factor` |
+| `AHPR` | `ahpr` |
 | `AHPR_%` | `ahpr_percent` |
+| `GHPR` | `ghpr` |
+| `GHPR_%` | `ghpr_percent` |
+| `total_trades` | `total_trades` |
+| `total_deals` | `total_deals` |
+| `ticks` | `ticks` |
+| `balance_drawdown_absolute` | `balance_drawdown_absolute` |
+| `balance_drawdown_maximal` | `balance_drawdown_maximal` |
+| `balance_drawdown_maximal_%` | `balance_drawdown_maximal_percent` |
+| `balance_drawdown_relative_%` | `balance_drawdown_relative_percent` |
+| `balance_drawdown_relative` | `balance_drawdown_relative` |
+| `expected_payoff` | `expected_payoff` |
+| `sharpe_ratio` | `sharpe_ratio` |
+| `lr_correlation` | `lr_correlation` |
+| `lr_standard_error` | `lr_standard_error` |
+| `short_trades` | `short_trades` |
+| `short_trades_won_%` | `short_trades_won_percent` |
+| `profit_trades` | `profit_trades` |
+| `profit_trades_% (of total)` | `profit_trades_percent_of_total` |
+| `largest_profit_trade` | `largest_profit_trade` |
+| `average_profit_trade` | `average_profit_trade` |
+| `maximum_consecutive_wins` | `maximum_consecutive_wins` |
+| `amount_from_maximum_consecutive_wins` | `amount_from_maximum_consecutive_wins` |
+| `maximal_consecutive_profit` | `maximal_consecutive_profit` |
+| `maximal_consecutive_profit_count` | `maximal_consecutive_profit_count` |
+| `average_consecutive_wins` | `average_consecutive_wins` |
+| `symbols` | `symbols` |
+| `equity_drawdown_absolute` | `equity_drawdown_absolute` |
+| `equity_drawdown_maximal` | `equity_drawdown_maximal` |
+| `equity_drawdown_maximal_%` | `equity_drawdown_maximal_percent` |
+| `equity_drawdown_relative_%` | `equity_drawdown_relative_percent` |
+| `equity_drawdown_relative` | `equity_drawdown_relative` |
+| `margin_level_%` | `margin_level_percent` |
+| `z_score` | `z_score` |
+| `z_score_%` | `z_score_percent` |
+| `ontester_result` | `ontester_result` |
+| `long_trades` | `long_trades` |
+| `long_trades_won_%` | `long_trades_won_percent` |
+| `loss_trades` | `loss_trades` |
+| `loss_trades_% (of total)` | `loss_trades_percent_of_total` |
+| `largest_loss_trade` | `largest_loss_trade` |
+| `average_loss_trade` | `average_loss_trade` |
+| `maximum_consecutive_losses` | `maximum_consecutive_losses` |
+| `amount_from_maximum_consecutive_losses` | `amount_from_maximum_consecutive_losses` |
+| `maximal_consecutive_loss` | `maximal_consecutive_loss` |
+| `maximal_consecutive_loss_count` | `maximal_consecutive_loss_count` |
+| `average_consecutive_losses` | `average_consecutive_losses` |
+| `correlation (Profits, MFE)` | `correlation_profits_mfe` |
+| `correlation (Profits, MAE)` | `correlation_profits_mae` |
+| `correlation (MFE, MAE)` | `correlation_mfe_mae` |
+| `commission` | `commission` |
+| `swap` | `swap` |
+| `profit` | `profit` |
+| `balance` | `balance` |
 
 Rules:
 - `_below = X` → fail if value **<** X
 - `_above = X` → fail if value **>** X
 - All **62 numeric** result metrics are supported (% fields and negatives included)
-- Holding-time string fields (`*_holding_time`) are excluded
+
+**Excluded** (string holding-time fields — not valid in `[disqualifiers]`):
+- `minimal_positon_holding_time`
+- `maximal_positon_holding_time`
+- `average_positon_holding_time`
 
 #### Scoring methods
 
