@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -5,6 +6,7 @@ use serde::Deserialize;
 
 use crate::metrics::ALLOWED_SCORE_METRICS;
 
+use super::disqualify::{self, DisqualifierOp};
 use super::error::{rel_path, ScoreError, Result};
 
 pub const SCORING_METHODS: &[&str] = &[
@@ -18,7 +20,19 @@ pub const SCORING_METHODS: &[&str] = &[
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScoreConfigFile {
     pub scoring: ScoringSection,
+    #[serde(default)]
+    pub disqualifiers: BTreeMap<String, toml::Value>,
     pub metrics: Vec<MetricConfig>,
+    /// Parsed from `[disqualifiers]` after load (not in TOML directly).
+    #[serde(skip)]
+    pub disqualifier_rules: Vec<DisqualifierRule>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DisqualifierRule {
+    pub metric: String,
+    pub op: DisqualifierOp,
+    pub threshold: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -46,8 +60,9 @@ pub fn load_config(path: &Path) -> Result<ScoreConfigFile> {
         return Err(ScoreError::FileNotFound(rel_path(path)));
     }
     let content = fs::read_to_string(path).map_err(|e| ScoreError::InvalidToml(e.to_string()))?;
-    let config: ScoreConfigFile =
+    let mut config: ScoreConfigFile =
         toml::from_str(&content).map_err(|e| ScoreError::InvalidToml(e.to_string()))?;
+    config.disqualifier_rules = disqualify::parse_disqualifiers(&config.disqualifiers)?;
     Ok(config)
 }
 
@@ -156,6 +171,8 @@ mod tests {
                 pass_threshold: Some(60.0),
                 decay: None,
             },
+            disqualifiers: BTreeMap::new(),
+            disqualifier_rules: vec![],
             metrics: vec![MetricConfig {
                 name: "profit_factor".into(),
                 weight: 100.0,
@@ -175,6 +192,8 @@ mod tests {
                 pass_threshold: Some(60.0),
                 decay: None,
             },
+            disqualifiers: BTreeMap::new(),
+            disqualifier_rules: vec![],
             metrics: vec![MetricConfig {
                 name: "profit_factor".into(),
                 weight: 50.0,

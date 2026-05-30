@@ -115,23 +115,287 @@ Also ensure:
 rustmt5 metrics examples/output/test/strategy_report.htm
 ```
 
-Parses the MT5 HTML report (UTF-8 or UTF-16LE), validates 65 result metrics plus settings, and writes JSON to **`output/metrics/{report_name}.json`** by default.
+Parses the MT5 HTML strategy report (UTF-8 or UTF-16LE), validates **65 numeric/string result metrics** plus settings, and writes JSON.
 
 ```bash
-rustmt5 metrics report.htm -o ./my_metrics.json
-rustmt5 metrics report2.htm --append ./my_metrics.json   # adds report id = max + 1
+# Default output: output/metrics/{report_name}.json
+rustmt5 metrics report.htm
+
+# Custom path (overwrites — starts fresh at report id 1)
+rustmt5 metrics report.htm -o examples/output/metrics/strategy_report.json
+
+# Append to existing file (next id = max + 1)
+rustmt5 metrics report2.htm --append examples/output/metrics/strategy_report.json
 ```
+
+#### Metrics JSON structure
+
+Each file has a `"report(s)"` array. Every report contains `id`, `settings` (expert, symbol, period, inputs, …), and `results` (all 65 metric keys):
+
+```json
+{
+  "report(s)": [
+    {
+      "id": 1,
+      "settings": {
+        "expert": "strategy",
+        "symbol": "USA500",
+        "period": { "timeframe": "M5", "from_date": "2026.04.01", "to_date": "2026.05.01" },
+        "inputs": { "LotSize": "0.1" },
+        "company": "MetaQuotes",
+        "currency": "USD",
+        "initial_deposit": 10000,
+        "leverage": "1:500"
+      },
+      "results": {
+        "profit_factor": 0.87,
+        "sharpe_ratio": -5.0,
+        "total_trades": 33999,
+        "balance_drawdown_maximal_%": 8.40,
+        "minimal_positon_holding_time": "00:00:01",
+        "...": "..."
+      }
+    }
+  ]
+}
+```
+
+See `metrics_schema.json` for the canonical shape.
+
+#### Validation rules
+
+- All **65** `results` keys must be present per report
+- **Integers:** `bars`, `total_trades`, `ticks`, … (see schema)
+- **Floats:** percentages (`_*%`), ratios, profit/loss amounts — negatives allowed
+- **Strings:** `*_holding_time` fields (`HH:MM:SS` format)
+- No `null`, `NaN`, or `Infinity` values
+
+#### Append behaviour
+
+- `--append` loads the existing file, assigns `id = max(existing ids) + 1`, and preserves all prior reports
+- `-o` without `--append` **overwrites** the file with a single new report (`id: 1`)
+- Duplicate content is detected on append; terminal shows e.g. `Report ID: 3 - duplicate of [ID 2, ID 1]`
+
+---
 
 ### Score metrics
 
 ```bash
-rustmt5 score examples/score.toml output/metrics/strategy_report.json
+rustmt5 score examples/score.toml examples/output/metrics/strategy_report.json
 ```
 
-Loads a TOML config (`weighted_average`, `geometric_mean`, `harmonic_mean`, `exponential_weighted`, or `weighted_sum`), normalizes metrics to 0–100, prints a breakdown, and reports PASS/FAIL against `pass_threshold`.
+Loads a TOML config, validates metrics JSON, applies **hard disqualifiers** (if any), normalizes metrics to 0–100, calculates a weighted score, and prints PASS/FAIL.
 
 Typical workflow: `compile` → `test` → `metrics` → `score`.
 
+#### Basic `score.toml`
+
+```toml
+[scoring]
+method = "weighted_average"
+pass_threshold = 60.0
+
+[[metrics]]
+name = "profit_factor"
+weight = 30.0
+direction = "higher_is_better"
+
+[[metrics]]
+name = "sharpe_ratio"
+weight = 25.0
+direction = "higher_is_better"
+
+[[metrics]]
+name = "balance_drawdown_maximal_%"
+weight = 25.0
+direction = "lower_is_better"
+
+[[metrics]]
+name = "recovery_factor"
+weight = 20.0
+direction = "higher_is_better"
+```
+
+`pass_threshold` is optional; if you leave it out, it defaults to **60.0**.
+
+| Field | Description |
+|---|---|
+| `method` | Scoring algorithm (see below) |
+| `pass_threshold` | Optional — final score must be ≥ this (0–100) to PASS. **Defaults to `60.0` if omitted.** |
+| `[[metrics]].name` | Exact key from metrics JSON `results` |
+| `[[metrics]].weight` | Relative importance (should sum to 100 for weighted methods) |
+| `[[metrics]].direction` | `higher_is_better` or `lower_is_better` |
+| `[[metrics]].min_value` | Optional — values below this normalize to 0 |
+| `[[metrics]].cap_value` | Optional — values above this are capped before normalization |
+
+#### Hard disqualifiers
+
+Separate from scoring weights — checked **before** any score is calculated. Any violation is an automatic **FAIL** (no breakdown shown).
+
+```toml
+[disqualifiers]
+profit_factor_below = 0.8
+balance_drawdown_maximal_percent_above = 40.0
+total_net_profit_below = 0.0
+```
+
+**Key format:** `{metric_toml_name}_below` or `{metric_toml_name}_above`
+
+| JSON metric key | TOML disqualifier prefix |
+|---|---|
+| `profit_factor` | `profit_factor` |
+| `balance_drawdown_maximal_%` | `balance_drawdown_maximal_percent` |
+| `profit_trades_% (of total)` | `profit_trades_percent_of_total` |
+| `correlation (Profits, MFE)` | `correlation_profits_mfe` |
+| `AHPR_%` | `ahpr_percent` |
+
+Rules:
+- `_below = X` → fail if value **<** X
+- `_above = X` → fail if value **>** X
+- All **62 numeric** result metrics are supported (% fields and negatives included)
+- Holding-time string fields (`*_holding_time`) are excluded
+
+#### Scoring methods
+
+| Method | Formula (after normalizing each metric to 0–100) |
+|---|---|
+| `weighted_average` | `Σ(norm × weight) / Σ(weight)` |
+| `weighted_sum` | Same as weighted average in this implementation |
+| `geometric_mean` | `100 × ∏(norm/100)^w` — penalizes weak links |
+| `harmonic_mean` | `100 × Σ(weight) / Σ(weight / (norm/100))` — strictest; worst metric drags score down |
+| `exponential_weighted` | `Σ((norm/100)^exponent × weight) / Σ(weight) × 100` where `exponent = 2 - decay` |
+
+**Geometric / harmonic / exponential** do not require weights to sum to 100.  
+**Weighted average / weighted sum** expect weights ≈ 100 (±1 tolerance).
+
+**Exponential weighted** — set `decay` in `[scoring]` (0 < decay < 2, default 1.0):
+
+```toml
+[scoring]
+method = "exponential_weighted"
+decay = 1.5          # exponent = 0.5 — punishes weak metrics more
+pass_threshold = 60.0
+```
+
+#### Normalization
+
+Each metric is clamped by optional `min_value` / `cap_value`, then mapped to 0–100 using industry-standard bounds:
+
+| Metric | Min | Max | Direction |
+|---|---|---|---|
+| `profit_factor` | 0 | 5 | higher |
+| `sharpe_ratio` | -5 | 5 | higher |
+| `recovery_factor` | -10 | 10 | higher |
+| `expected_payoff` | -0.5 | 1.0 | higher |
+| `z_score_%` | 0 | 100 | higher |
+| `balance_drawdown_maximal_%` | 0 | 100 | lower |
+| `equity_drawdown_maximal_%` | 0 | 100 | lower |
+
+For `lower_is_better`, the normalized value is inverted (lower raw → higher score).
+
+#### Example configs
+
+**Conservative (min/cap on metrics):**
+
+```toml
+[scoring]
+method = "weighted_average"
+pass_threshold = 65.0
+
+[[metrics]]
+name = "profit_factor"
+weight = 35.0
+direction = "higher_is_better"
+min_value = 0.8
+cap_value = 4.0
+
+[[metrics]]
+name = "balance_drawdown_maximal_%"
+weight = 30.0
+direction = "lower_is_better"
+cap_value = 40.0
+
+[[metrics]]
+name = "sharpe_ratio"
+weight = 20.0
+direction = "higher_is_better"
+min_value = 0.0
+
+[[metrics]]
+name = "z_score_%"
+weight = 15.0
+direction = "higher_is_better"
+min_value = 50.0
+```
+
+**Harmonic mean (ultra-conservative):**
+
+```toml
+[scoring]
+method = "harmonic_mean"
+pass_threshold = 70.0
+
+[[metrics]]
+name = "profit_factor"
+weight = 30.0
+direction = "higher_is_better"
+min_value = 1.2
+cap_value = 3.0
+
+[[metrics]]
+name = "sharpe_ratio"
+weight = 25.0
+direction = "higher_is_better"
+min_value = 1.0
+
+[[metrics]]
+name = "z_score_%"
+weight = 25.0
+direction = "higher_is_better"
+min_value = 90.0
+
+[[metrics]]
+name = "balance_drawdown_maximal_%"
+weight = 20.0
+direction = "lower_is_better"
+cap_value = 25.0
+```
+
+#### Score output
+
+Single report:
+
+```
+✓ Score calculated successfully
+  Config: examples/score.toml (method: weighted_average)
+  Metrics: examples/output/metrics/strategy_report.json (report ID: 1)
+
+  Results:
+    Report ID: 1
+    Score: 39.9 / 100
+    Status: FAIL (threshold: 60.0)
+
+  Breakdown (weighted_average):
+    profit_factor (30%):          18.0 → 5.4
+    ...
+  Status: FAIL (≥ 60.0)
+```
+
+Disqualified report:
+
+```
+  Results:
+    Report ID: 1
+    Status: FAIL (disqualified)
+
+  Disqualifiers:
+    - profit_factor below 0.8 (value: 0.5)
+    - total_net_profit below 0 (value: -835.76)
+
+  Status: FAIL (hard disqualifier triggered)
+```
+
+---
 ### Example `.ini` config
 
 ```ini
@@ -216,7 +480,7 @@ src/
 ├── compile.rs      # Compile subcommand
 ├── test.rs         # Test subcommand
 ├── metrics/        # HTML → JSON extraction
-└── score/          # TOML config scoring
+└── score/          # TOML config, disqualifiers, scoring
 ```
 
 ## Distribution

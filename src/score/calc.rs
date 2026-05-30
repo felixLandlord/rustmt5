@@ -21,6 +21,8 @@ pub struct ScoreResult {
     pub report_id: u32,
     pub final_score: f64,
     pub passed: bool,
+    pub disqualified: bool,
+    pub disqualifier_violations: Vec<String>,
     pub breakdown: Vec<MetricBreakdown>,
 }
 
@@ -30,6 +32,18 @@ pub fn score_report(
     results: &BTreeMap<String, Value>,
     pass_threshold: f64,
 ) -> Result<ScoreResult> {
+    let violations = super::disqualify::check_disqualifiers(&config.disqualifier_rules, results)?;
+    if !violations.is_empty() {
+        return Ok(ScoreResult {
+            report_id,
+            final_score: 0.0,
+            passed: false,
+            disqualified: true,
+            disqualifier_violations: violations,
+            breakdown: vec![],
+        });
+    }
+
     let mut items = Vec::new();
     for m in &config.metrics {
         let raw = extract_numeric(results, &m.name)?;
@@ -56,6 +70,8 @@ pub fn score_report(
         report_id,
         final_score,
         passed: final_score >= pass_threshold,
+        disqualified: false,
+        disqualifier_violations: vec![],
         breakdown,
     })
 }
@@ -193,6 +209,8 @@ mod tests {
                 pass_threshold: Some(50.0),
                 decay: Some(1.0),
             },
+            disqualifiers: BTreeMap::new(),
+            disqualifier_rules: vec![],
             metrics,
         }
     }
@@ -230,5 +248,29 @@ mod tests {
             .unwrap()
             .final_score;
         assert!(geo < avg);
+    }
+
+    #[test]
+    fn disqualifier_fails_before_scoring() {
+        use crate::score::config::DisqualifierRule;
+        use crate::score::disqualify::DisqualifierOp;
+
+        let mut results = BTreeMap::new();
+        results.insert("profit_factor".into(), json!(0.5));
+        results.insert("sharpe_ratio".into(), json!(1.2));
+        let mut cfg = config(
+            "weighted_average",
+            vec![metric("sharpe_ratio", 100.0, "higher_is_better")],
+        );
+        cfg.disqualifier_rules = vec![DisqualifierRule {
+            metric: "profit_factor".into(),
+            op: DisqualifierOp::Below,
+            threshold: 0.8,
+        }];
+        let r = score_report(&cfg, 1, &results, 50.0).unwrap();
+        assert!(r.disqualified);
+        assert!(!r.passed);
+        assert!(r.breakdown.is_empty());
+        assert_eq!(r.disqualifier_violations.len(), 1);
     }
 }

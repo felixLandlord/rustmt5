@@ -1,8 +1,14 @@
-# Example score config — balanced weighted average
+# Example score config — balanced weighted average with hard disqualifiers
 
 [scoring]
 method = "weighted_average"
 pass_threshold = 60.0
+
+# Automatic FAIL before scoring if any rule is violated
+[disqualifiers]
+profit_factor_below = 0.8
+balance_drawdown_maximal_percent_above = 40.0
+total_net_profit_below = 0.0
 
 [[metrics]]
 name = "profit_factor"

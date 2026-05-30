@@ -1,5 +1,6 @@
 mod calc;
 mod config;
+mod disqualify;
 mod error;
 mod normalize;
 
@@ -116,6 +117,19 @@ fn print_results(
         println!();
         println!("  Results:");
         println!("    Report ID: {}", r.report_id);
+
+        if r.disqualified {
+            println!("    Status: FAIL (disqualified)");
+            println!();
+            println!("  Disqualifiers:");
+            for v in &r.disqualifier_violations {
+                println!("    - {v}");
+            }
+            println!();
+            println!("  Status: FAIL (hard disqualifier triggered)");
+            return;
+        }
+
         println!("    Score: {:.1} / 100", r.final_score);
         let status = if r.passed { "PASS" } else { "FAIL" };
         println!("    Status: {status} (threshold: {threshold:.1})");
@@ -145,11 +159,19 @@ fn print_results(
         println!("  Summary:");
         let passed = results.iter().filter(|r| r.passed).count();
         for r in results {
-            let status = if r.passed { "PASS" } else { "FAIL" };
-            println!(
-                "    Report {}: {:.1} / 100 ({status})",
-                r.report_id, r.final_score
-            );
+            if r.disqualified {
+                println!(
+                    "    Report {}: DISQUALIFIED ({})",
+                    r.report_id,
+                    r.disqualifier_violations.join("; ")
+                );
+            } else {
+                let status = if r.passed { "PASS" } else { "FAIL" };
+                println!(
+                    "    Report {}: {:.1} / 100 ({status})",
+                    r.report_id, r.final_score
+                );
+            }
         }
         let rate = if results.is_empty() {
             0.0

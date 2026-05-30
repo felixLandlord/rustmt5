@@ -10,6 +10,14 @@ pub use schema::ALLOWED_SCORE_METRICS;
 pub use types::MetricsFile;
 pub use validate::validate_metrics_file;
 
+/// Numeric result keys eligible for score disqualifiers (excludes holding-time strings).
+pub fn numeric_result_keys() -> impl Iterator<Item = &'static str> {
+    schema::REQUIRED_RESULT_KEYS
+        .iter()
+        .copied()
+        .filter(|k| !schema::is_time_key(k))
+}
+
 use std::path::{Path, PathBuf};
 
 use error::{path_buf_display, Result};
