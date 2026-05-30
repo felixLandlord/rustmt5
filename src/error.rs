@@ -32,4 +32,10 @@ pub enum Error {
 
     #[error("{0}")]
     Io(#[from] std::io::Error),
+
+    #[error("{0}")]
+    Metrics(#[from] crate::metrics::MetricsError),
+
+    #[error("{0}")]
+    Score(#[from] crate::score::ScoreError),
 }

@@ -39,6 +39,8 @@ rustmt5 --help              # list subcommands and global options
 rustmt5 --version           # print package version (from Cargo.toml)
 rustmt5 compile --help      # compile subcommand options
 rustmt5 test --help         # test subcommand options
+rustmt5 metrics --help      # metrics subcommand options
+rustmt5 score --help        # score subcommand options
 ```
 
 ### Compile an MQL5 file
@@ -106,6 +108,29 @@ Also ensure:
 - MT5 is **not already open** (only one terminal instance at a time)
 - The compiled EA exists at the right path.
 - Historical data exists for the `Symbol` and `Period` in your `.ini`
+
+### Extract metrics from a report
+
+```bash
+rustmt5 metrics examples/output/test/strategy_report.htm
+```
+
+Parses the MT5 HTML report (UTF-8 or UTF-16LE), validates 65 result metrics plus settings, and writes JSON to **`output/metrics/{report_name}.json`** by default.
+
+```bash
+rustmt5 metrics report.htm -o ./my_metrics.json
+rustmt5 metrics report2.htm --append ./my_metrics.json   # adds report id = max + 1
+```
+
+### Score metrics
+
+```bash
+rustmt5 score examples/score.toml output/metrics/strategy_report.json
+```
+
+Loads a TOML config (`weighted_average`, `geometric_mean`, `harmonic_mean`, `exponential_weighted`, or `weighted_sum`), normalizes metrics to 0–100, prints a breakdown, and reports PASS/FAIL against `pass_threshold`.
+
+Typical workflow: `compile` → `test` → `metrics` → `score`.
 
 ### Example `.ini` config
 
@@ -181,14 +206,17 @@ export RUSTMT5_EXPERTS_DIR="$HOME/Library/Application Support/net.metaquotes.win
 
 ```
 src/
-├── main.rs       # Entry point
-├── cli.rs        # CLI argument parsing (clap)
-├── error.rs      # Error types
-├── mt5.rs        # MT5 binary discovery
+├── main.rs         # Entry point
+├── cli.rs          # CLI (compile, test, metrics, score)
+├── error.rs        # Error types
+├── text_decode.rs  # UTF-8 / UTF-16LE text files
+├── mt5.rs          # MT5 binary discovery
 ├── wine.rs         # Mac-to-Wine path translation
-├── wine_output.rs  # Wine stderr noise filtering
+├── wine_output.rs  # Wine stderr filtering
 ├── compile.rs      # Compile subcommand
-└── test.rs         # Test subcommand
+├── test.rs         # Test subcommand
+├── metrics/        # HTML → JSON extraction
+└── score/          # TOML config scoring
 ```
 
 ## Distribution

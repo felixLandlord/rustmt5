@@ -1,0 +1,181 @@
+//! Canonical metric keys and type rules for extraction and validation.
+
+/// JSON root key for the reports array (matches MT5 export naming).
+#[allow(dead_code)]
+pub const REPORTS_KEY: &str = "report(s)";
+
+/// All required keys in each report's `results` object (65 metrics).
+pub const REQUIRED_RESULT_KEYS: &[&str] = &[
+    "history_quality_%",
+    "bars",
+    "total_net_profit",
+    "gross_profit",
+    "gross_loss",
+    "profit_factor",
+    "recovery_factor",
+    "AHPR",
+    "AHPR_%",
+    "GHPR",
+    "GHPR_%",
+    "total_trades",
+    "total_deals",
+    "ticks",
+    "balance_drawdown_absolute",
+    "balance_drawdown_maximal",
+    "balance_drawdown_maximal_%",
+    "balance_drawdown_relative_%",
+    "balance_drawdown_relative",
+    "expected_payoff",
+    "sharpe_ratio",
+    "lr_correlation",
+    "lr_standard_error",
+    "short_trades",
+    "short_trades_won_%",
+    "profit_trades",
+    "profit_trades_% (of total)",
+    "largest_profit_trade",
+    "average_profit_trade",
+    "maximum_consecutive_wins",
+    "amount_from_maximum_consecutive_wins",
+    "maximal_consecutive_profit",
+    "maximal_consecutive_profit_count",
+    "average_consecutive_wins",
+    "symbols",
+    "equity_drawdown_absolute",
+    "equity_drawdown_maximal",
+    "equity_drawdown_maximal_%",
+    "equity_drawdown_relative_%",
+    "equity_drawdown_relative",
+    "margin_level_%",
+    "z_score",
+    "z_score_%",
+    "ontester_result",
+    "long_trades",
+    "long_trades_won_%",
+    "loss_trades",
+    "loss_trades_% (of total)",
+    "largest_loss_trade",
+    "average_loss_trade",
+    "maximum_consecutive_losses",
+    "amount_from_maximum_consecutive_losses",
+    "maximal_consecutive_loss",
+    "maximal_consecutive_loss_count",
+    "average_consecutive_losses",
+    "correlation (Profits, MFE)",
+    "correlation (Profits, MAE)",
+    "correlation (MFE, MAE)",
+    "minimal_positon_holding_time",
+    "maximal_positon_holding_time",
+    "average_positon_holding_time",
+    "commission",
+    "swap",
+    "profit",
+    "balance",
+];
+
+/// Metrics allowed in score config `[[metrics]]` (superset for validation).
+pub const ALLOWED_SCORE_METRICS: &[&str] = &[
+    "profit_factor",
+    "recovery_factor",
+    "AHPR",
+    "AHPR_%",
+    "GHPR",
+    "GHPR_%",
+    "total_trades",
+    "total_deals",
+    "ticks",
+    "balance_drawdown_absolute",
+    "balance_drawdown_maximal",
+    "balance_drawdown_maximal_%",
+    "balance_drawdown_relative_%",
+    "balance_drawdown_relative",
+    "expected_payoff",
+    "sharpe_ratio",
+    "lr_correlation",
+    "lr_standard_error",
+    "short_trades",
+    "short_trades_won_%",
+    "profit_trades",
+    "profit_trades_% (of total)",
+    "largest_profit_trade",
+    "average_profit_trade",
+    "maximum_consecutive_wins",
+    "amount_from_maximum_consecutive_wins",
+    "maximal_consecutive_profit",
+    "maximal_consecutive_profit_count",
+    "average_consecutive_wins",
+    "symbols",
+    "equity_drawdown_absolute",
+    "equity_drawdown_maximal",
+    "equity_drawdown_maximal_%",
+    "equity_drawdown_relative_%",
+    "equity_drawdown_relative",
+    "margin_level_%",
+    "z_score",
+    "z_score_%",
+    "ontester_result",
+    "long_trades",
+    "long_trades_won_%",
+    "loss_trades",
+    "loss_trades_% (of total)",
+    "largest_loss_trade",
+    "average_loss_trade",
+    "maximum_consecutive_losses",
+    "amount_from_maximum_consecutive_losses",
+    "maximal_consecutive_loss",
+    "maximal_consecutive_loss_count",
+    "average_consecutive_losses",
+    "correlation (Profits, MFE)",
+    "correlation (Profits, MAE)",
+    "correlation (MFE, MAE)",
+    "history_quality_%",
+    "bars",
+    "total_net_profit",
+    "gross_profit",
+    "gross_loss",
+    "commission",
+    "swap",
+    "profit",
+    "balance",
+];
+
+pub const INTEGER_RESULT_KEYS: &[&str] = &[
+    "history_quality_%",
+    "bars",
+    "total_deals",
+    "ticks",
+    "total_trades",
+    "short_trades",
+    "profit_trades",
+    "long_trades",
+    "loss_trades",
+    "maximum_consecutive_wins",
+    "maximum_consecutive_losses",
+    "symbols",
+    "maximal_consecutive_profit_count",
+    "maximal_consecutive_loss_count",
+    "average_consecutive_wins",
+    "average_consecutive_losses",
+];
+
+pub const TIME_RESULT_KEYS: &[&str] = &[
+    "minimal_positon_holding_time",
+    "maximal_positon_holding_time",
+    "average_positon_holding_time",
+];
+
+pub fn is_integer_key(key: &str) -> bool {
+    INTEGER_RESULT_KEYS.contains(&key)
+}
+
+pub fn is_time_key(key: &str) -> bool {
+    TIME_RESULT_KEYS.contains(&key)
+}
+
+pub fn is_percent_key(key: &str) -> bool {
+    key.ends_with("_%") && !is_integer_key(key)
+}
+
+pub fn metric_count() -> usize {
+    REQUIRED_RESULT_KEYS.len()
+}

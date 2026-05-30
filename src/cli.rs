@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "rustmt5",
     version,
-    about = "Compile MQL5 files and run MT5 strategy tester from the command line"
+    about = "Compile MQL5 files, run MT5 strategy tester, extract metrics, and score backtests"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -45,5 +45,28 @@ pub enum Command {
             value_name = "DIR"
         )]
         input: Option<String>,
+    },
+
+    /// Extract metrics from an MT5 HTML strategy report into JSON
+    Metrics {
+        /// Path to the .htm report file
+        file: PathBuf,
+
+        /// Output JSON path (default: output/metrics/{report_name}.json)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Append to an existing metrics JSON file
+        #[arg(long)]
+        append: Option<PathBuf>,
+    },
+
+    /// Score backtest metrics using a TOML configuration
+    Score {
+        /// Path to score configuration (.toml)
+        config: PathBuf,
+
+        /// Path to extracted metrics JSON
+        metrics: PathBuf,
     },
 }

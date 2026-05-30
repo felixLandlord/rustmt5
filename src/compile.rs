@@ -102,22 +102,7 @@ fn read_log(path: &Path) -> Option<String> {
         return None;
     }
     let bytes = std::fs::read(path).ok()?;
-    decode_text_file(&bytes)
-}
-
-fn decode_text_file(bytes: &[u8]) -> Option<String> {
-    // MetaEditor commonly writes logs as UTF-16LE with BOM.
-    if bytes.starts_with(&[0xFF, 0xFE]) {
-        // Interpret as UTF-16LE.
-        let mut u16s = Vec::with_capacity((bytes.len().saturating_sub(2)) / 2);
-        for chunk in bytes[2..].chunks_exact(2) {
-            u16s.push(u16::from_le_bytes([chunk[0], chunk[1]]));
-        }
-        return Some(String::from_utf16_lossy(&u16s));
-    }
-
-    // UTF-8 (or ASCII) fallback.
-    std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+    crate::text_decode::decode_text_file(&bytes)
 }
 
 fn wait_and_read_log(mq5: &Path, canonical_log_path: &Path) -> Option<String> {
@@ -408,7 +393,7 @@ Result: 2 errors, 0 warnings\n";
         for u in s.encode_utf16() {
             bytes.extend_from_slice(&u.to_le_bytes());
         }
-        let decoded = decode_text_file(&bytes).unwrap();
+        let decoded = crate::text_decode::decode_text_file(&bytes).unwrap();
         assert!(decoded.contains("Result: 0 errors, 0 warnings"));
     }
 

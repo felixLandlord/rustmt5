@@ -1,0 +1,25 @@
+# Example score config — balanced weighted average
+
+[scoring]
+method = "weighted_average"
+pass_threshold = 60.0
+
+[[metrics]]
+name = "profit_factor"
+weight = 30.0
+direction = "higher_is_better"
+
+[[metrics]]
+name = "sharpe_ratio"
+weight = 25.0
+direction = "higher_is_better"
+
+[[metrics]]
+name = "balance_drawdown_maximal_%"
+weight = 25.0
+direction = "lower_is_better"
+
+[[metrics]]
+name = "recovery_factor"
+weight = 20.0
+direction = "higher_is_better"
