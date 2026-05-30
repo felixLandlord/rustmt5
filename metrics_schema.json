@@ -1,0 +1,104 @@
+{
+    "report(s)": [
+        {
+            "id": 1,
+            "settings": {
+                "expert": "rustmt5_ea/MyEA",
+                "symbol": "USA100",
+                "period": {
+                    "timeframe": "M5",
+                    "from_date": "2018.08.01",
+                    "to_date": "2026.05.01"
+                },
+                "inputs": {},
+                "company": "MetaQuotes",
+                "currency": "USD",
+                "initial_deposit": 10000,
+                "leverage": "1:500"
+            },
+            "results": {
+                "history_quality_%": 98,
+                "bars": 550057,
+                "total_net_profit": -835.76,
+                "gross_profit": 5467.68,
+                "gross_loss": -6303.44,
+
+                "profit_factor": 0.87,
+                "recovery_factor": -0.99,
+                "AHPR": 1.00,
+                "AHPR_%": -0.00,
+                "GHPR": 1.00,
+                "GHPR_%": -0.00,
+
+                "total_trades": 33999,
+                "total_deals": 67998,
+
+                "ticks": 10078513,
+                "balance_drawdown_absolute": 839.68,
+                "balance_drawdown_maximal": 839.68,
+                "balance_drawdown_maximal_%": 8.40,
+                "balance_drawdown_relative_%": 8.40,
+                "balance_drawdown_relative": 839.68,
+
+                "expected_payoff": -0.02,
+                "sharpe_ratio": -5.00,
+                "lr_correlation": -1.00,
+                "lr_standard_error": 22.84,
+
+                "short_trades": 17255,
+                "short_trades_won_%": 28.85,
+                "profit_trades": 10100,
+                "profit_trades_% (of total)": 29.71,
+                "largest_profit_trade": 0.67,
+                "average_profit_trade": 0.54,
+                "maximum_consecutive_wins": 8,
+                "amount_from_maximum_consecutive_wins": 4.65,
+                "maximal_consecutive_profit": 4.65,
+                "maximal_consecutive_profit_count": 8,
+                "average_consecutive_wins": 1,
+
+                "symbols": 1,
+                "equity_drawdown_absolute": 840.33,
+                "equity_drawdown_maximal": 840.39,
+                "equity_drawdown_maximal_%": 8.40,
+                "equity_drawdown_relative_%": 8.40,
+                "equity_drawdown_relative": 840.39,
+
+                "margin_level_%": 1272320.83,
+                "z_score": 14.53,
+                "z_score_%": 99.74,
+                "ontester_result": 0,
+
+                "long_trades": 16744,
+                "long_trades_won_%": 30.59,
+                "loss_trades": 23899,
+                "loss_trades_% (of total)": 70.29,
+                "largest_loss_trade": -0.90,
+                "average_loss_trade": -0.26,
+                "maximum_consecutive_losses": 27,
+                "amount_from_maximum_consecutive_losses": -4.84,
+                "maximal_consecutive_loss": -6.68,
+                "maximal_consecutive_loss_count": 26,
+                "average_consecutive_losses": 3,
+
+                "correlation (Profits, MFE)": 0.80,
+                "correlation (Profits, MAE)": 0.54,
+                "correlation (MFE, MAE)": 0.3791,
+
+                "minimal_positon_holding_time": "00:00:01",
+                "maximal_positon_holding_time": "30:35:00",
+                "average_positon_holding_time": "00:31:54",
+
+                "commission": 0.00,
+                "swap": -57.09,
+                "profit": -778.67,
+                "balance": 9164.24
+            }
+        },
+        {
+            
+        }
+
+    ]
+    
+}

@@ -70,6 +70,11 @@ impl Mt5Paths {
     pub fn install_dir(&self) -> PathBuf {
         self.wine_prefix.join(DRIVE_C_MT5)
     }
+
+    /// `MQL5/Experts/` inside the MT5 install directory.
+    pub fn experts_dir(&self) -> PathBuf {
+        self.install_dir().join("MQL5/Experts")
+    }
 }
 
 fn discover_wine_prefix() -> Result<PathBuf> {

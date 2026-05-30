@@ -99,10 +99,12 @@ MT5 always writes reports to its install directory (next to `terminal64.exe`). T
 
 Wine and MoltenVK noise (Vulkan extension lists, toolbar/HID messages) is suppressed via `WINEDEBUG=-all`, `MVK_CONFIG_LOG_LEVEL=0`, and output filtering.
 
-Before running a test, ensure:
+Before running a test, `rustmt5 test` checks that the Expert from your `.ini` exists under `MQL5/Experts/` (e.g. `Expert=rustmt5_ea\strategy` → `…/MQL5/Experts/rustmt5_ea/strategy.ex5`). If it is missing, the test exits with an error before launching MT5.
+
+Also ensure:
 
 - MT5 is **not already open** (only one terminal instance at a time)
-- The compiled EA exists under `MQL5/Experts/` — e.g. `rustmt5 compile examples/strategy.mq5 --output`
+- The compiled EA exists at the right path.
 - Historical data exists for the `Symbol` and `Period` in your `.ini`
 
 ### Example `.ini` config

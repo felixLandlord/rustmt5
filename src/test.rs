@@ -38,6 +38,8 @@ pub fn run(file: &Path, report_dest: Option<&Path>) -> Result<()> {
     let ini_content = fs::read_to_string(file)?;
     let report_name = parse_report_name(&ini_content);
 
+    validate_expert_exists(&paths, &ini_content)?;
+
     // Ensure the report subdir exists inside the MT5 install dir so MT5 can write there.
     // Normalise separators: Wine may use `\`; macOS Path needs `/`.
     if let Some(ref name) = report_name {
@@ -227,17 +229,62 @@ fn copy_reports(html: Option<&Path>, related: &[PathBuf], dest: &Path, stem: &st
 
 /// Read `Report=` from the `.ini` (key lookup is case-insensitive).
 pub(crate) fn parse_report_name(ini_content: &str) -> Option<String> {
+    parse_tester_value(ini_content, "Report")
+}
+
+/// Read `Expert=` from the `.ini` (key lookup is case-insensitive).
+pub(crate) fn parse_expert_name(ini_content: &str) -> Option<String> {
+    parse_tester_value(ini_content, "Expert")
+}
+
+fn parse_tester_value(ini_content: &str, key_name: &str) -> Option<String> {
     ini_content.lines().map(str::trim).find_map(|line| {
         if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
             return None;
         }
         let (key, value) = line.split_once('=')?;
-        if key.trim().eq_ignore_ascii_case("Report") {
+        if key.trim().eq_ignore_ascii_case(key_name) {
             let name = value.trim();
-            if name.is_empty() { None } else { Some(name.to_string()) }
+            if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            }
         } else {
             None
         }
+    })
+}
+
+/// Resolve `Expert=` to the expected `.ex5` path under `MQL5/Experts/`.
+///
+/// `rustmt5_ea\strategy` → `…/MQL5/Experts/rustmt5_ea/strategy.ex5`
+pub(crate) fn resolve_expert_path(experts_dir: &Path, expert: &str) -> PathBuf {
+    let normalised = expert.replace('\\', "/");
+    experts_dir.join(format!("{normalised}.ex5"))
+}
+
+/// Fail early if the Expert from the `.ini` is not installed under `MQL5/Experts/`.
+pub(crate) fn validate_expert_exists(paths: &Mt5Paths, ini_content: &str) -> Result<()> {
+    let Some(expert) = parse_expert_name(ini_content) else {
+        return Err(Error::InvalidIniFile {
+            reason: "missing Expert= under [Tester]".into(),
+        });
+    };
+
+    let expected = resolve_expert_path(&paths.experts_dir(), &expert);
+    if expected.is_file() {
+        return Ok(());
+    }
+
+    Err(Error::TestFailed {
+        detail: format!(
+            "Expert not found: {}\n\
+             Expert={expert} in your .ini requires this file.\n\
+             Compile and deploy first, e.g.:\n\
+               rustmt5 compile MyEA.mq5 --output",
+            expected.display()
+        ),
     })
 }
 
@@ -406,6 +453,90 @@ mod tests {
     fn parse_report_name_returns_none_when_missing() {
         let ini = "[Tester]\nExpert=MyEA\n";
         assert!(parse_report_name(ini).is_none());
+    }
+
+    #[test]
+    fn parse_expert_name_reads_backslash_path() {
+        let ini = "[Tester]\nExpert=rustmt5_ea\\strategy\n";
+        assert_eq!(parse_expert_name(ini).as_deref(), Some("rustmt5_ea\\strategy"));
+    }
+
+    #[test]
+    fn parse_expert_name_is_case_insensitive() {
+        let ini = "[Tester]\nexpert=MyEA\n";
+        assert_eq!(parse_expert_name(ini).as_deref(), Some("MyEA"));
+    }
+
+    #[test]
+    fn resolve_expert_path_handles_subdirectory() {
+        let experts = PathBuf::from("/mt5/MQL5/Experts");
+        let path = resolve_expert_path(&experts, r"rustmt5_ea\strategy");
+        assert_eq!(path, PathBuf::from("/mt5/MQL5/Experts/rustmt5_ea/strategy.ex5"));
+    }
+
+    #[test]
+    fn resolve_expert_path_handles_flat_name() {
+        let experts = PathBuf::from("/mt5/MQL5/Experts");
+        let path = resolve_expert_path(&experts, "strategy");
+        assert_eq!(path, PathBuf::from("/mt5/MQL5/Experts/strategy.ex5"));
+    }
+
+    #[test]
+    fn validate_expert_exists_accepts_installed_expert() {
+        let prefix = std::env::temp_dir().join("rustmt5_expert_ok");
+        let experts = prefix
+            .join("drive_c/Program Files/MetaTrader 5/MQL5/Experts/rustmt5_ea");
+        let _ = fs::remove_dir_all(&prefix);
+        fs::create_dir_all(&experts).unwrap();
+        fs::write(experts.join("strategy.ex5"), "fake").unwrap();
+
+        let paths = Mt5Paths {
+            wine: PathBuf::from("/wine"),
+            editor: PathBuf::from("/editor"),
+            terminal: PathBuf::from("/terminal"),
+            wine_prefix: prefix.clone(),
+        };
+        let ini = "[Tester]\nExpert=rustmt5_ea\\strategy\n";
+        assert!(validate_expert_exists(&paths, ini).is_ok());
+
+        let _ = fs::remove_dir_all(&prefix);
+    }
+
+    #[test]
+    fn validate_expert_exists_rejects_missing() {
+        let prefix = std::env::temp_dir().join("rustmt5_expert_missing");
+        let experts = prefix.join("drive_c/Program Files/MetaTrader 5/MQL5/Experts");
+        let _ = fs::remove_dir_all(&prefix);
+        fs::create_dir_all(&experts).unwrap();
+
+        let paths = Mt5Paths {
+            wine: PathBuf::from("/wine"),
+            editor: PathBuf::from("/editor"),
+            terminal: PathBuf::from("/terminal"),
+            wine_prefix: prefix.clone(),
+        };
+        let ini = "[Tester]\nExpert=rustmt5_ea\\strategy\n";
+        let result = validate_expert_exists(&paths, ini);
+        assert!(matches!(result, Err(Error::TestFailed { .. })));
+        if let Err(Error::TestFailed { detail }) = result {
+            assert!(detail.contains("rustmt5_ea/strategy.ex5"));
+            assert!(detail.contains("rustmt5 compile"));
+        }
+
+        let _ = fs::remove_dir_all(&prefix);
+    }
+
+    #[test]
+    fn validate_expert_exists_rejects_missing_expert_key() {
+        let paths = Mt5Paths {
+            wine: PathBuf::from("/wine"),
+            editor: PathBuf::from("/editor"),
+            terminal: PathBuf::from("/terminal"),
+            wine_prefix: PathBuf::from("/prefix"),
+        };
+        let ini = "[Tester]\nSymbol=EURUSD\n";
+        let result = validate_expert_exists(&paths, ini);
+        assert!(matches!(result, Err(Error::InvalidIniFile { .. })));
     }
 
     #[test]
