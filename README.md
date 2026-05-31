@@ -172,7 +172,7 @@ See `metrics_schema.json` for the canonical shape.
 
 #### Append behaviour
 
-- `--append` loads the existing file, assigns `id = max(existing ids) + 1`, and preserves all prior reports
+- `--append` loads the existing file if present (or **creates** it if missing), assigns `id = max(existing ids) + 1`, and preserves all prior reports
 - `-o` without `--append` **overwrites** the file with a single new report (`id: 1`)
 - Duplicate content is detected on append; terminal shows e.g. `Report ID: 3 - duplicate of [ID 2, ID 1]`
 
@@ -616,6 +616,16 @@ rustmt5 metrics examples/output/test/other_report.htm \
 
 # 4. Score (prints to terminal; reads config + metrics from examples/)
 rustmt5 score examples/score.toml examples/output/metrics/strategy_report.json
+```
+
+Running Commands At The Same Time (`outputs are piped to run.log`)
+
+```cli
+rustmt5 compile examples/strategy.mq5 --output > run.log 2>&1 && \
+rustmt5 test examples/backtest.ini >> run.log 2>&1 && \
+rustmt5 metrics examples/output/test/strategy_report.htm \
+  --append examples/output/metrics/strategy_report.json >> run.log 2>&1 && \
+rustmt5 score examples/score.toml examples/output/metrics/strategy_report.json 2>&1 | tee -a run.log
 ```
 
 ## Troubleshooting

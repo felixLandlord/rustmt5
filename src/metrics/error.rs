@@ -11,9 +11,6 @@ pub enum MetricsError {
     #[error("HTML parsing failed: {0}")]
     HtmlParsingFailed(String),
 
-    #[error("✗ Cannot append to metrics file\n  File not found: {0}\n\n  Hint: Omit --append flag to create a new file, or specify a valid existing file.")]
-    AppendFileNotFound(String),
-
     #[error("{summary}\n  {section}:\n{details}")]
     ValidationFailed {
         summary: String,

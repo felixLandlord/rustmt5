@@ -30,12 +30,11 @@ pub fn write_report(
     };
 
     let mut file = if let Some(append_path) = append {
-        if !append_path.exists() {
-            return Err(MetricsError::AppendFileNotFound(path_buf_display(
-                &append_path.to_path_buf(),
-            )));
+        if append_path.exists() {
+            load_metrics_file(append_path)?
+        } else {
+            MetricsFile { reports: vec![] }
         }
-        load_metrics_file(append_path)?
     } else {
         MetricsFile { reports: vec![] }
     };
@@ -115,6 +114,22 @@ mod tests {
             },
             results,
         }
+    }
+
+    #[test]
+    fn append_creates_file_when_missing() {
+        let dir = std::env::temp_dir().join("rustmt5_metrics_append_create");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("metrics.json");
+        let report = Path::new("report.htm");
+
+        let (_, id1, _) = write_report(report, minimal_entry(), None, Some(&path)).unwrap();
+        assert_eq!(id1, 1);
+        assert!(path.exists());
+        let file = load_metrics_file(&path).unwrap();
+        assert_eq!(file.reports.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
