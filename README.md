@@ -649,8 +649,8 @@ The Wine path translation may be incorrect. Double-check that `wine64` exists an
 export WINEPREFIX="$HOME/Library/Application Support/net.metaquotes.wine.metatrader5"
 ```
 
-**"MT5 must not already be running"**
-Only one instance of MT5 can run at a time. Quit any running MT5 instance before using `rustmt5 test`.
+**Expert not updating, or strategy tester not running**
+MetaTrader allows only one terminal instance at a time. If MT5 is already open (GUI or a previous `rustmt5 test` still running), `rustmt5 compile --output` may not pick up the latest `.ex5` in Experts, and `rustmt5 test` may fail, hang, or exit with a non-zero code. Quit MetaTrader 5 completely, then retry.
 
 **`rustmt5 test` fails with a non-zero exit code (e.g. 189)**
 The strategy tester did not complete successfully. Check that the EA is installed under `MQL5/Experts/`, the `.ini` `[Tester]` settings are valid, and you have history for the symbol/timeframe. Wine GUI spam in the terminal is harmless and is filtered by `rustmt5`.
