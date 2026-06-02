@@ -75,6 +75,17 @@ impl Mt5Paths {
     pub fn experts_dir(&self) -> PathBuf {
         self.install_dir().join("MQL5/Experts")
     }
+
+    /// Strategy tester input profiles (`MQL5/Profiles/Tester/`).
+    pub fn tester_profiles_dir(&self) -> PathBuf {
+        self.install_dir().join("MQL5/Profiles/Tester")
+    }
+
+    /// Tester `.set` path for an EA source file (`strategy.mq5` → `…/Tester/strategy.set`).
+    pub fn tester_set_path_for_mq5(&self, mq5: &Path) -> Option<PathBuf> {
+        let stem = mq5.file_stem()?.to_str()?;
+        Some(self.tester_profiles_dir().join(format!("{stem}.set")))
+    }
 }
 
 fn discover_wine_prefix() -> Result<PathBuf> {
@@ -358,6 +369,20 @@ mod tests {
         env::set_var("RUSTMT5_EXPERTS_DIR", custom.to_str().unwrap());
         assert_eq!(Mt5Paths::default_experts_dir(), custom);
         env::remove_var("RUSTMT5_EXPERTS_DIR");
+    }
+
+    #[test]
+    fn tester_set_path_for_mq5_resolves_under_profiles_tester() {
+        let paths = Mt5Paths {
+            wine: PathBuf::from("/wine"),
+            editor: PathBuf::from("/editor"),
+            terminal: PathBuf::from("/terminal"),
+            wine_prefix: PathBuf::from("/prefix"),
+        };
+        let set_path = paths
+            .tester_set_path_for_mq5(Path::new("examples/strategy.mq5"))
+            .unwrap();
+        assert!(set_path.ends_with("MQL5/Profiles/Tester/strategy.set"));
     }
 
     #[test]

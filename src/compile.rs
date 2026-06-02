@@ -29,6 +29,9 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     validate_mq5_file(file)?;
 
     let paths = Mt5Paths::discover()?;
+    if let Err(e) = remove_stale_tester_set(file, &paths) {
+        eprintln!("warning: could not remove tester .set file: {e}");
+    }
     let wine_path = wine::to_wine_path(file)?;
 
     // MetaEditor writes the .log next to the .mq5 using the canonical path,
@@ -91,6 +94,18 @@ pub fn run(file: &Path, output_dir: Option<&Path>) -> Result<()> {
     }
 
     result
+}
+
+/// Remove `{install_dir}/MQL5/Profiles/Tester/{stem}.set` if it exists.
+pub(crate) fn remove_stale_tester_set(mq5: &Path, paths: &Mt5Paths) -> std::io::Result<()> {
+    let Some(set_path) = paths.tester_set_path_for_mq5(mq5) else {
+        return Ok(());
+    };
+    if set_path.exists() {
+        std::fs::remove_file(&set_path)?;
+        eprintln!("Removed stale tester profile: {}", set_path.display());
+    }
+    Ok(())
 }
 
 fn log_path_for(mq5: &Path) -> PathBuf {
@@ -519,5 +534,44 @@ Result: 2 errors, 0 warnings\n";
     fn log_path_for_replaces_extension() {
         let mq5 = Path::new("/tmp/foo/strategy.mq5");
         assert_eq!(log_path_for(mq5), Path::new("/tmp/foo/strategy.log"));
+    }
+
+    fn temp_mt5_paths(label: &str) -> (Mt5Paths, PathBuf) {
+        let prefix = std::env::temp_dir().join(format!(
+            "rustmt5_compile_set_{}_{label}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&prefix);
+        std::fs::create_dir_all(
+            prefix.join("drive_c/Program Files/MetaTrader 5/MQL5/Profiles/Tester"),
+        )
+        .unwrap();
+        let paths = Mt5Paths {
+            wine: PathBuf::from("/wine"),
+            editor: PathBuf::from("/editor"),
+            terminal: PathBuf::from("/terminal"),
+            wine_prefix: prefix.clone(),
+        };
+        (paths, prefix)
+    }
+
+    #[test]
+    fn remove_stale_tester_set_deletes_existing_file() {
+        let (paths, prefix) = temp_mt5_paths("delete");
+        let mq5 = Path::new("strategy.mq5");
+        let set_path = paths.tester_set_path_for_mq5(mq5).unwrap();
+        std::fs::write(&set_path, "inputs").unwrap();
+        remove_stale_tester_set(mq5, &paths).unwrap();
+        assert!(!set_path.exists());
+        remove_stale_tester_set(mq5, &paths).unwrap();
+        let _ = std::fs::remove_dir_all(&prefix);
+    }
+
+    #[test]
+    fn remove_stale_tester_set_noop_when_missing() {
+        let (paths, prefix) = temp_mt5_paths("missing");
+        let mq5 = Path::new("strategy.mq5");
+        remove_stale_tester_set(mq5, &paths).unwrap();
+        let _ = std::fs::remove_dir_all(&prefix);
     }
 }

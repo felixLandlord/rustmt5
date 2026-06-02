@@ -51,6 +51,8 @@ rustmt5 compile MyEA.mq5
 
 MetaEditor writes `.ex5` and `.log` next to the source during compile; after every run (success or failure) `rustmt5` moves them into **`output/compile/`** next to the `.mq5` (e.g. `examples/output/compile/strategy.log`). The log is still printed to the terminal and used to detect errors.
 
+Before compile, `rustmt5` removes a stale strategy tester profile if present: `{MT5 install}/MQL5/Profiles/Tester/{name}.set` (e.g. compiling `strategy.mq5` deletes `strategy.set`). This avoids outdated tester inputs tied to the EA name.
+
 **Encoding note:** MetaEditor commonly writes `.log` files as **UTF‑16LE with a BOM**. `rustmt5` detects and decodes this automatically.
 
 #### Deploy to MT5 Experts with `--output`
