@@ -117,18 +117,47 @@ Also ensure:
 rustmt5 metrics examples/output/test/strategy_report.htm
 ```
 
-Parses the MT5 HTML strategy report (UTF-8 or UTF-16LE), validates **65 numeric/string result metrics** plus settings, and writes JSON.
+Parses the MT5 HTML strategy report (UTF-8 or UTF-16LE), validates **65 numeric/string result metrics** plus settings, and writes JSON. It also extracts paired trades from the **Deals** section into **`trade_report.json`** next to the metrics file.
 
 ```bash
 # Default output: output/metrics/{report_name}.json
+# Also writes:    output/metrics/trade_report.json
 rustmt5 metrics report.htm
 
 # Custom path (overwrites — starts fresh at report id 1)
+# trade_report.json is written beside that path
 rustmt5 metrics report.htm -o examples/output/metrics/strategy_report.json
 
 # Append to existing file (next id = max + 1)
+# trade_report.json is overwritten with trades from this HTML run
 rustmt5 metrics report2.htm --append examples/output/metrics/strategy_report.json
 ```
+
+#### Trade report (`trade_report.json`)
+
+Each closed position is one object (entry `in` deal + exit `out` deal paired from the Deals table):
+
+```json
+[
+  {
+    "count": 1,
+    "in_time": "2026.05.01 01:40:00",
+    "out_time": "2026.05.01 01:51:40",
+    "type": "sell",
+    "volume": 0.16,
+    "in_price": 27502.8,
+    "out_price": 27482.19,
+    "commission": 0,
+    "swap": 0,
+    "profit": 3.3,
+    "balance": 58.3
+  }
+]
+```
+
+- Written to the **same directory** as the metrics JSON, always named `trade_report.json`
+- Overwritten on every `metrics` run (including `--append`)
+- Skips the initial balance row; requires an even number of in/out deal rows
 
 #### Metrics JSON structure
 

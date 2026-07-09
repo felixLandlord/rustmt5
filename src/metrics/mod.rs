@@ -2,6 +2,7 @@ mod error;
 mod io;
 mod parse;
 mod schema;
+mod trades;
 mod types;
 mod validate;
 
@@ -22,6 +23,7 @@ use std::path::{Path, PathBuf};
 
 use error::{path_buf_display, Result};
 use parse::{parse_html_report, report_stem};
+use trades::extract_trades;
 use validate::{count_valid_metrics, validate_extracted_report};
 
 /// Run the `metrics` subcommand.
@@ -50,13 +52,26 @@ pub fn run(
     let entry = parse_html_report(&html, &stem)?;
     validate_extracted_report(&entry, &stem)?;
 
+    let trades = extract_trades(&html)?;
+    let trade_count = trades.len();
+
     let valid_count = count_valid_metrics(&entry.results);
     let total = schema::metric_count();
 
     let (out_path, report_id, duplicate_of) =
         io::write_report(report_path, entry, output, append)?;
+    let trade_path = io::write_trade_report(&out_path, &trades)?;
 
-    print_success(&stem, valid_count, total, report_id, &duplicate_of, &out_path);
+    print_success(
+        &stem,
+        valid_count,
+        total,
+        report_id,
+        &duplicate_of,
+        &out_path,
+        trade_count,
+        &trade_path,
+    );
     Ok(())
 }
 
@@ -67,11 +82,17 @@ fn print_success(
     id: u32,
     duplicate_of: &[u32],
     path: &Path,
+    trade_count: usize,
+    trade_path: &Path,
 ) {
     let rel = path
         .strip_prefix(std::env::current_dir().unwrap_or_default())
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| path.display().to_string());
+    let trade_rel = trade_path
+        .strip_prefix(std::env::current_dir().unwrap_or_default())
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| trade_path.display().to_string());
     println!("✓ Extracted metrics from {report_name}.htm");
     println!("  Metrics: {valid} / {total} present and valid");
     if duplicate_of.is_empty() {
@@ -85,4 +106,6 @@ fn print_success(
         println!("  Report ID: {id} - duplicate of [{ids}]");
     }
     println!("  Saved to: {rel}");
+    println!("  Trades: {trade_count}");
+    println!("  Trade report: {trade_rel}");
 }

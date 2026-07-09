@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::error::{path_buf_display, MetricsError, Result};
+use super::trades::TradeRecord;
 use super::types::{MetricsFile, ReportEntry};
 use super::validate;
 
@@ -15,6 +16,25 @@ pub fn default_output_path(report_path: &Path) -> PathBuf {
 
 pub fn resolve_output_path(report_path: &Path, output: Option<PathBuf>) -> PathBuf {
     output.unwrap_or_else(|| default_output_path(report_path))
+}
+
+/// `trade_report.json` in the same directory as the metrics JSON.
+pub fn trade_report_path(metrics_path: &Path) -> PathBuf {
+    metrics_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("trade_report.json")
+}
+
+pub fn write_trade_report(metrics_path: &Path, trades: &[TradeRecord]) -> Result<PathBuf> {
+    let out_path = trade_report_path(metrics_path);
+    if let Some(parent) = out_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| MetricsError::InvalidJson(e.to_string()))?;
+    }
+    let json = serde_json::to_string_pretty(trades)
+        .map_err(|e| MetricsError::InvalidJson(e.to_string()))?;
+    fs::write(&out_path, json).map_err(|e| MetricsError::InvalidJson(e.to_string()))?;
+    Ok(out_path)
 }
 
 pub fn write_report(
@@ -165,5 +185,44 @@ mod tests {
             ReportEntry { id: 3, ..b },
         ];
         assert_eq!(ReportEntry::duplicate_ids_in(&existing, &a), vec![5, 1]);
+    }
+
+    #[test]
+    fn trade_report_path_is_sibling_of_metrics() {
+        let metrics = Path::new("examples/output/metrics/strategy_report.json");
+        assert_eq!(
+            trade_report_path(metrics),
+            PathBuf::from("examples/output/metrics/trade_report.json")
+        );
+    }
+
+    #[test]
+    fn write_trade_report_creates_json_array() {
+        use crate::metrics::trades::TradeRecord;
+
+        let dir = std::env::temp_dir().join("rustmt5_trade_report_write");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let metrics = dir.join("strategy_report.json");
+        let trades = vec![TradeRecord {
+            count: 1,
+            in_time: "2026.05.01 01:40:00".into(),
+            out_time: "2026.05.01 01:51:40".into(),
+            trade_type: "sell".into(),
+            volume: json!(0.16),
+            in_price: json!(27502.8),
+            out_price: json!(27482.19),
+            commission: json!(0),
+            swap: json!(0),
+            profit: json!(3.3),
+            balance: json!(58.3),
+        }];
+        let path = write_trade_report(&metrics, &trades).unwrap();
+        assert_eq!(path, dir.join("trade_report.json"));
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: Vec<TradeRecord> = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].trade_type, "sell");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
