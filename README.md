@@ -150,7 +150,9 @@ Each closed position is one object (entry `in` deal + exit `out` deal paired fro
     "commission": 0,
     "swap": 0,
     "profit": 3.3,
-    "balance": 58.3
+    "balance": 58.3,
+    "sl": 17.9,
+    "tp": 28.05
   }
 ]
 ```
@@ -158,6 +160,7 @@ Each closed position is one object (entry `in` deal + exit `out` deal paired fro
 - Written to the **same directory** as the metrics JSON, always named `trade_report.json`
 - Overwritten on every `metrics` run (including `--append`)
 - Skips the initial balance row; requires an even number of in/out deal rows
+- `sl` / `tp` are **distances** from entry price to Orders `S / L` and `T / P` (absolute), mapped via the entry deal's order id — not the SL/TP prices themselves
 
 #### Metrics JSON structure
 

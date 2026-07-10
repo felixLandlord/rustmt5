@@ -216,6 +216,8 @@ mod tests {
             swap: json!(0),
             profit: json!(3.3),
             balance: json!(58.3),
+            sl: json!(17.9),
+            tp: json!(28.05),
         }];
         let path = write_trade_report(&metrics, &trades).unwrap();
         assert_eq!(path, dir.join("trade_report.json"));
